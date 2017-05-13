@@ -173,19 +173,19 @@ static PARTITION_TYPE PartitionTypes[] =
 
 VOID
 GetPartTypeStringFromPartitionType(
-    UCHAR partitionType,
-    PCHAR strPartType,
-    DWORD cchPartType)
+    IN UCHAR partitionType,
+    OUT PCHAR strPartType,
+    IN ULONG cchPartType)
 {
     /* Determine partition type */
 
     if (IsContainerPartition(partitionType))
     {
-        StringCchCopy(strPartType, cchPartType, MUIGetString(STRING_EXTENDED_PARTITION));
+        StringCchCopyA(strPartType, cchPartType, MUIGetString(STRING_EXTENDED_PARTITION));
     }
     else if (partitionType == PARTITION_ENTRY_UNUSED)
     {
-        StringCchCopy(strPartType, cchPartType, MUIGetString(STRING_FORMATUNUSED));
+        StringCchCopyA(strPartType, cchPartType, MUIGetString(STRING_FORMATUNUSED));
     }
     else
     {
@@ -196,13 +196,13 @@ GetPartTypeStringFromPartitionType(
         {
             if (partitionType == PartitionTypes[i].Type)
             {
-                StringCchCopy(strPartType, cchPartType, PartitionTypes[i].Description);
+                StringCchCopyA(strPartType, cchPartType, PartitionTypes[i].Description);
                 return;
             }
         }
 
         /* We are here because the partition type is unknown */
-        StringCchCopy(strPartType, cchPartType, MUIGetString(STRING_FORMATUNKNOWN));
+        StringCchCopyA(strPartType, cchPartType, MUIGetString(STRING_FORMATUNKNOWN));
     }
 }
 
@@ -252,7 +252,6 @@ AlignDown(
     return Temp * Alignment;
 }
 
-
 ULONGLONG
 AlignUp(
     IN ULONGLONG Value,
@@ -281,7 +280,7 @@ RoundingDivide(
 static
 VOID
 GetDriverName(
-    PDISKENTRY DiskEntry)
+    IN PDISKENTRY DiskEntry)
 {
     RTL_QUERY_REGISTRY_TABLE QueryTable[2];
     WCHAR KeyName[32];
@@ -316,7 +315,7 @@ GetDriverName(
 static
 VOID
 AssignDriveLetters(
-    PPARTLIST List)
+    IN PPARTLIST List)
 {
     PDISKENTRY DiskEntry;
     PPARTENTRY PartEntry;
@@ -395,7 +394,7 @@ AssignDriveLetters(
 }
 
 
-NTSTATUS
+static NTSTATUS
 NTAPI
 DiskIdentifierQueryRoutine(
     PWSTR ValueName,
@@ -425,7 +424,7 @@ DiskIdentifierQueryRoutine(
 }
 
 
-NTSTATUS
+static NTSTATUS
 NTAPI
 DiskConfigurationDataQueryRoutine(
     PWSTR ValueName,
@@ -469,7 +468,7 @@ DiskConfigurationDataQueryRoutine(
 }
 
 
-NTSTATUS
+static NTSTATUS
 NTAPI
 SystemConfigurationDataQueryRoutine(
     PWSTR ValueName,
@@ -521,7 +520,7 @@ SystemConfigurationDataQueryRoutine(
 
 static VOID
 EnumerateBiosDiskEntries(
-    PPARTLIST PartList)
+    IN PPARTLIST PartList)
 {
     RTL_QUERY_REGISTRY_TABLE QueryTable[3];
     WCHAR Name[120];
@@ -662,16 +661,16 @@ EnumerateBiosDiskEntries(
 static
 VOID
 AddPartitionToDisk(
-    ULONG DiskNumber,
-    PDISKENTRY DiskEntry,
-    ULONG PartitionIndex,
-    BOOLEAN LogicalPartition)
+    IN ULONG DiskNumber,
+    IN PDISKENTRY DiskEntry,
+    IN ULONG PartitionIndex,
+    IN BOOLEAN LogicalPartition)
 {
     PPARTITION_INFORMATION PartitionInfo;
     PPARTENTRY PartEntry;
 
     PartitionInfo = &DiskEntry->LayoutBuffer->PartitionEntry[PartitionIndex];
-    if (PartitionInfo->PartitionType == 0 ||
+    if (PartitionInfo->PartitionType == PARTITION_ENTRY_UNUSED ||
         (LogicalPartition == TRUE && IsContainerPartition(PartitionInfo->PartitionType)))
         return;
 
@@ -772,7 +771,7 @@ AddPartitionToDisk(
 static
 VOID
 ScanForUnpartitionedDiskSpace(
-    PDISKENTRY DiskEntry)
+    IN PDISKENTRY DiskEntry)
 {
     ULONGLONG LastStartSector;
     ULONGLONG LastSectorCount;
@@ -787,7 +786,7 @@ ScanForUnpartitionedDiskSpace(
     {
         DPRINT1("No primary partition!\n");
 
-        /* Create a partition table that represents the empty disk */
+        /* Create a partition entry that represents the empty disk */
         NewPartEntry = RtlAllocateHeap(ProcessHeap,
                                        HEAP_ZERO_MEMORY,
                                        sizeof(PARTENTRY));
@@ -905,7 +904,7 @@ ScanForUnpartitionedDiskSpace(
         {
             DPRINT1("No logical partition!\n");
 
-            /* Create a partition table entry that represents the empty extended partition */
+            /* Create a partition entry that represents the empty extended partition */
             NewPartEntry = RtlAllocateHeap(ProcessHeap,
                                            HEAP_ZERO_MEMORY,
                                            sizeof(PARTENTRY));
@@ -1079,12 +1078,12 @@ SetDiskSignature(
 static
 VOID
 UpdateDiskSignatures(
-    PPARTLIST List)
+    IN PPARTLIST List)
 {
     PLIST_ENTRY Entry;
     PDISKENTRY DiskEntry;
 
-    /* Print partition lines*/
+    /* Print partition lines */
     Entry = List->DiskListHead.Flink;
     while (Entry != &List->DiskListHead)
     {
@@ -1105,9 +1104,9 @@ UpdateDiskSignatures(
 static
 VOID
 AddDiskToList(
-    HANDLE FileHandle,
-    ULONG DiskNumber,
-    PPARTLIST List)
+    IN HANDLE FileHandle,
+    IN ULONG DiskNumber,
+    IN PPARTLIST List)
 {
     DISK_GEOMETRY DiskGeometry;
     SCSI_ADDRESS ScsiAddress;
@@ -1137,9 +1136,7 @@ AddDiskToList(
                                    &DiskGeometry,
                                    sizeof(DISK_GEOMETRY));
     if (!NT_SUCCESS(Status))
-    {
         return;
-    }
 
     if (DiskGeometry.MediaType != FixedMedia &&
         DiskGeometry.MediaType != RemovableMedia)
@@ -1158,17 +1155,13 @@ AddDiskToList(
                                    &ScsiAddress,
                                    sizeof(SCSI_ADDRESS));
     if (!NT_SUCCESS(Status))
-    {
         return;
-    }
 
     Mbr = (PARTITION_SECTOR*)RtlAllocateHeap(ProcessHeap,
                                              0,
                                              DiskGeometry.BytesPerSector);
     if (Mbr == NULL)
-    {
         return;
-    }
 
     FileOffset.QuadPart = 0;
     Status = NtReadFile(FileHandle,
@@ -1218,7 +1211,7 @@ AddDiskToList(
     else
         DiskEntry->NoMbr = FALSE;
 
-    /* Free Mbr sector buffer */
+    /* Free the MBR sector buffer */
     RtlFreeHeap(ProcessHeap, 0, Mbr);
 
     ListEntry = List->BiosDiskListHead.Flink;
@@ -1227,7 +1220,7 @@ AddDiskToList(
         BiosDiskEntry = CONTAINING_RECORD(ListEntry, BIOSDISKENTRY, ListEntry);
         /* FIXME:
          *   Compare the size from bios and the reported size from driver.
-         *   If we have more than one disk with a zero or with the same signatur
+         *   If we have more than one disk with a zero or with the same signature
          *   we must create new signatures and reboot. After the reboot,
          *   it is possible to identify the disks.
          */
@@ -1347,7 +1340,7 @@ AddDiskToList(
 
     if (DiskEntry->LayoutBuffer->PartitionEntry[0].StartingOffset.QuadPart != 0 &&
         DiskEntry->LayoutBuffer->PartitionEntry[0].PartitionLength.QuadPart != 0 &&
-        DiskEntry->LayoutBuffer->PartitionEntry[0].PartitionType != 0)
+        DiskEntry->LayoutBuffer->PartitionEntry[0].PartitionType != PARTITION_ENTRY_UNUSED)
     {
         if ((DiskEntry->LayoutBuffer->PartitionEntry[0].StartingOffset.QuadPart / DiskEntry->BytesPerSector) % DiskEntry->SectorsPerTrack == 0)
         {
@@ -1498,7 +1491,7 @@ CreatePartitionList(
 
         if (IsListEmpty(&List->CurrentDisk->PrimaryPartListHead))
         {
-            List->CurrentPartition = 0;
+            List->CurrentPartition = NULL;
         }
         else
         {
@@ -1514,7 +1507,7 @@ CreatePartitionList(
 
 VOID
 DestroyPartitionList(
-    PPARTLIST List)
+    IN PPARTLIST List)
 {
     PDISKENTRY DiskEntry;
     PBIOSDISKENTRY BiosDiskEntry;
@@ -1574,10 +1567,10 @@ DestroyPartitionList(
 static
 VOID
 PrintEmptyLine(
-    PPARTLIST List)
+    IN PPARTLIST List)
 {
     COORD coPos;
-    DWORD Written;
+    ULONG Written;
     USHORT Width;
     USHORT Height;
 
@@ -1609,13 +1602,13 @@ PrintEmptyLine(
 static
 VOID
 PrintPartitionData(
-    PPARTLIST List,
-    PDISKENTRY DiskEntry,
-    PPARTENTRY PartEntry)
+    IN PPARTLIST List,
+    IN PDISKENTRY DiskEntry,
+    IN PPARTENTRY PartEntry)
 {
     CHAR LineBuffer[128];
     COORD coPos;
-    DWORD Written;
+    ULONG Written;
     USHORT Width;
     USHORT Height;
     LARGE_INTEGER PartSize;
@@ -1765,14 +1758,14 @@ PrintPartitionData(
 static
 VOID
 PrintDiskData(
-    PPARTLIST List,
-    PDISKENTRY DiskEntry)
+    IN PPARTLIST List,
+    IN PDISKENTRY DiskEntry)
 {
     PPARTENTRY PrimaryPartEntry, LogicalPartEntry;
     PLIST_ENTRY PrimaryEntry, LogicalEntry;
     CHAR LineBuffer[128];
     COORD coPos;
-    DWORD Written;
+    ULONG Written;
     USHORT Width;
     USHORT Height;
     ULARGE_INTEGER DiskSize;
@@ -1887,19 +1880,19 @@ PrintDiskData(
 
 VOID
 DrawPartitionList(
-    PPARTLIST List)
+    IN PPARTLIST List)
 {
     PLIST_ENTRY Entry, Entry2;
     PDISKENTRY DiskEntry;
     PPARTENTRY PartEntry = NULL;
     COORD coPos;
-    DWORD Written;
+    ULONG Written;
     SHORT i;
     SHORT CurrentDiskLine;
     SHORT CurrentPartLine;
     SHORT LastLine;
-    BOOL CurrentPartLineFound = FALSE;
-    BOOL CurrentDiskLineFound = FALSE;
+    BOOLEAN CurrentPartLineFound = FALSE;
+    BOOLEAN CurrentDiskLineFound = FALSE;
 
     /* Calculate the line of the current disk and partition */
     CurrentDiskLine = 0;
@@ -2129,11 +2122,11 @@ DrawPartitionList(
 }
 
 
-DWORD
+ULONG
 SelectPartition(
-    PPARTLIST List,
-    ULONG DiskNumber,
-    ULONG PartitionNumber)
+    IN PPARTLIST List,
+    IN ULONG DiskNumber,
+    IN ULONG PartitionNumber)
 {
     PDISKENTRY DiskEntry;
     PPARTENTRY PartEntry;
@@ -2180,7 +2173,7 @@ SelectPartition(
 
 BOOL
 ScrollDownPartitionList(
-    PPARTLIST List)
+    IN PPARTLIST List)
 {
     PLIST_ENTRY DiskListEntry;
     PLIST_ENTRY PartListEntry;
@@ -2276,7 +2269,7 @@ ScrollDownPartitionList(
 
 BOOL
 ScrollUpPartitionList(
-    PPARTLIST List)
+    IN PPARTLIST List)
 {
     PLIST_ENTRY DiskListEntry;
     PLIST_ENTRY PartListEntry;
@@ -2373,7 +2366,7 @@ ScrollUpPartitionList(
 static
 BOOLEAN
 IsEmptyLayoutEntry(
-    PPARTITION_INFORMATION PartitionInfo)
+    IN PPARTITION_INFORMATION PartitionInfo)
 {
     if (PartitionInfo->StartingOffset.QuadPart == 0 &&
         PartitionInfo->PartitionLength.QuadPart == 0)
@@ -2426,7 +2419,7 @@ GetPrimaryPartitionCount(
 static
 ULONG
 GetLogicalPartitionCount(
-    PDISKENTRY DiskEntry)
+    IN PDISKENTRY DiskEntry)
 {
     PLIST_ENTRY ListEntry;
     PPARTENTRY PartEntry;
@@ -2447,9 +2440,9 @@ GetLogicalPartitionCount(
 
 
 static
-BOOL
+BOOLEAN
 ReAllocateLayoutBuffer(
-    PDISKENTRY DiskEntry)
+    IN PDISKENTRY DiskEntry)
 {
     PDRIVE_LAYOUT_INFORMATION NewLayoutBuffer;
     ULONG NewPartitionCount;
@@ -2485,8 +2478,8 @@ ReAllocateLayoutBuffer(
     /* If the layout buffer grows, make sure the new (empty) entries are written to the disk */
     if (NewPartitionCount > CurrentPartitionCount)
     {
-         for (i = CurrentPartitionCount; i < NewPartitionCount; i++)
-             NewLayoutBuffer->PartitionEntry[i].RewritePartition = TRUE;
+        for (i = CurrentPartitionCount; i < NewPartitionCount; i++)
+            NewLayoutBuffer->PartitionEntry[i].RewritePartition = TRUE;
     }
 
     DiskEntry->LayoutBuffer = NewLayoutBuffer;
@@ -2555,7 +2548,7 @@ UpdateDiskLayout(
         ListEntry = ListEntry->Flink;
     }
 
-    /* Update the logical partition tables */
+    /* Update the logical partition table */
     Index = 4;
     ListEntry = DiskEntry->LogicalPartListHead.Flink;
     while (ListEntry != &DiskEntry->LogicalPartListHead)
@@ -2580,7 +2573,7 @@ UpdateDiskLayout(
             PartEntry->PartitionNumber = PartitionNumber;
             PartEntry->PartitionIndex = Index;
 
-            /* Fill the link entry of the previous partition table */
+            /* Fill the link entry of the previous partition entry */
             if (LinkInfo != NULL)
             {
                 LinkInfo->StartingOffset.QuadPart = (PartEntry->StartSector.QuadPart - DiskEntry->SectorAlignment) * DiskEntry->BytesPerSector;
@@ -2594,7 +2587,7 @@ UpdateDiskLayout(
                 LinkInfo->RewritePartition = TRUE;
             }
 
-            /* Save a pointer to the link entry of the current partition table */
+            /* Save a pointer to the link entry of the current partition entry */
             LinkInfo = &DiskEntry->LayoutBuffer->PartitionEntry[Index + 1];
 
             PartitionNumber++;
@@ -2604,7 +2597,7 @@ UpdateDiskLayout(
         ListEntry = ListEntry->Flink;
     }
 
-    /* Wipe unused primary partition table entries */
+    /* Wipe unused primary partition entries */
     for (Index = GetPrimaryPartitionCount(DiskEntry); Index < 4; Index++)
     {
         DPRINT1("Primary partition entry %lu\n", Index);
@@ -2626,7 +2619,7 @@ UpdateDiskLayout(
         }
     }
 
-    /* Wipe unused logical partition table entries */
+    /* Wipe unused logical partition entries */
     for (Index = 4; Index < DiskEntry->LayoutBuffer->PartitionCount; Index++)
     {
         if (Index % 4 >= 2)
@@ -2660,8 +2653,8 @@ UpdateDiskLayout(
 static
 PPARTENTRY
 GetPrevUnpartitionedEntry(
-    PDISKENTRY DiskEntry,
-    PPARTENTRY PartEntry)
+    IN PDISKENTRY DiskEntry,
+    IN PPARTENTRY PartEntry)
 {
     PPARTENTRY PrevPartEntry;
     PLIST_ENTRY ListHead;
@@ -2687,8 +2680,8 @@ GetPrevUnpartitionedEntry(
 static
 PPARTENTRY
 GetNextUnpartitionedEntry(
-    PDISKENTRY DiskEntry,
-    PPARTENTRY PartEntry)
+    IN PDISKENTRY DiskEntry,
+    IN PPARTENTRY PartEntry)
 {
     PPARTENTRY NextPartEntry;
     PLIST_ENTRY ListHead;
@@ -2713,9 +2706,9 @@ GetNextUnpartitionedEntry(
 
 VOID
 CreatePrimaryPartition(
-    PPARTLIST List,
-    ULONGLONG SectorCount,
-    BOOLEAN AutoCreate)
+    IN PPARTLIST List,
+    IN ULONGLONG SectorCount,
+    IN BOOLEAN AutoCreate)
 {
     PDISKENTRY DiskEntry;
     PPARTENTRY PartEntry;
@@ -2799,13 +2792,13 @@ CreatePrimaryPartition(
 static
 VOID
 AddLogicalDiskSpace(
-    PDISKENTRY DiskEntry)
+    IN PDISKENTRY DiskEntry)
 {
     PPARTENTRY NewPartEntry;
 
     DPRINT1("AddLogicalDiskSpace()\n");
 
-    /* Create a partition table entry that represents the empty space in the container partition */
+    /* Create a partition entry that represents the empty space in the container partition */
     NewPartEntry = RtlAllocateHeap(ProcessHeap,
                                    HEAP_ZERO_MEMORY,
                                    sizeof(PARTENTRY));
@@ -2832,8 +2825,8 @@ AddLogicalDiskSpace(
 
 VOID
 CreateExtendedPartition(
-    PPARTLIST List,
-    ULONGLONG SectorCount)
+    IN PPARTLIST List,
+    IN ULONGLONG SectorCount)
 {
     PDISKENTRY DiskEntry;
     PPARTENTRY PartEntry;
@@ -2941,9 +2934,9 @@ CreateExtendedPartition(
 
 VOID
 CreateLogicalPartition(
-    PPARTLIST List,
-    ULONGLONG SectorCount,
-    BOOLEAN AutoCreate)
+    IN PPARTLIST List,
+    IN ULONGLONG SectorCount,
+    IN BOOLEAN AutoCreate)
 {
     PDISKENTRY DiskEntry;
     PPARTENTRY PartEntry;
@@ -3028,7 +3021,7 @@ CreateLogicalPartition(
 
 VOID
 DeleteCurrentPartition(
-    PPARTLIST List)
+    IN PPARTLIST List)
 {
     PDISKENTRY DiskEntry;
     PPARTENTRY PartEntry;
@@ -3045,7 +3038,7 @@ DeleteCurrentPartition(
         return;
     }
 
-    /* Clear the system disk and partition pointers if the system partition will be deleted */
+    /* Clear the system disk and partition pointers if the system partition is being deleted */
     if (List->SystemPartition == List->CurrentPartition)
     {
         List->SystemDisk = NULL;
@@ -3461,7 +3454,7 @@ WritePartitions(
 
 BOOLEAN
 WritePartitionsToDisk(
-    PPARTLIST List)
+    IN PPARTLIST List)
 {
     PLIST_ENTRY Entry;
     PDISKENTRY DiskEntry;
@@ -3487,9 +3480,9 @@ WritePartitionsToDisk(
 }
 
 
-BOOL
+BOOLEAN
 SetMountedDeviceValues(
-    PPARTLIST List)
+    IN PPARTLIST List)
 {
     PLIST_ENTRY Entry1, Entry2;
     PDISKENTRY DiskEntry;
@@ -3497,9 +3490,7 @@ SetMountedDeviceValues(
     LARGE_INTEGER StartingOffset;
 
     if (List == NULL)
-    {
         return FALSE;
-    }
 
     Entry1 = List->DiskListHead.Flink;
     while (Entry1 != &List->DiskListHead)
@@ -3514,6 +3505,7 @@ SetMountedDeviceValues(
             PartEntry = CONTAINING_RECORD(Entry2, PARTENTRY, ListEntry);
             if (PartEntry->IsPartitioned)
             {
+                /* Assign a "\DosDevices\#:" mount point to this partition */
                 if (PartEntry->DriveLetter)
                 {
                     StartingOffset.QuadPart = PartEntry->StartSector.QuadPart * DiskEntry->BytesPerSector;
@@ -3602,10 +3594,10 @@ LogicalPartitionCreationChecks(
 }
 
 
-BOOL
+BOOLEAN
 GetNextUnformattedPartition(
     IN PPARTLIST List,
-    OUT PDISKENTRY *pDiskEntry,
+    OUT PDISKENTRY *pDiskEntry OPTIONAL,
     OUT PPARTENTRY *pPartEntry)
 {
     PLIST_ENTRY Entry1, Entry2;
@@ -3656,11 +3648,10 @@ GetNextUnformattedPartition(
     return FALSE;
 }
 
-
-BOOL
+BOOLEAN
 GetNextUncheckedPartition(
     IN PPARTLIST List,
-    OUT PDISKENTRY *pDiskEntry,
+    OUT PDISKENTRY *pDiskEntry OPTIONAL,
     OUT PPARTENTRY *pPartEntry)
 {
     PLIST_ENTRY Entry1, Entry2;
