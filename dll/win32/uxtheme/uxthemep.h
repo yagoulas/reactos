@@ -20,6 +20,10 @@
 #include <vfwmsgs.h>
 #include <tmschema.h>
 
+#define NTOS_MODE_USER
+#include <ndk/ntndk.h>
+#include <ndk/rtltypes.h>
+
 #include <wine/debug.h>
 WINE_DEFAULT_DEBUG_CHANNEL(uxtheme);
 
@@ -86,6 +90,14 @@ typedef struct _THEME_FILE {
 
 typedef struct _UXINI_FILE *PUXINI_FILE;
 
+typedef struct _UXTHEME_HANDLE 
+{
+    RTL_HANDLE_TABLE_ENTRY Handle;
+    PTHEME_CLASS pClass;
+} UXTHEME_HANDLE, *PUXTHEME_HANDLE;
+
+PTHEME_CLASS ValidateHandle(HTHEME hTheme);
+
 HRESULT UXTHEME_LoadImage(HTHEME hTheme, HDC hdc, int iPartId, int iStateId, const RECT *pRect, BOOL glyph,
                           HBITMAP *hBmp, RECT *bmpRect, BOOL* hasImageAlpha);
 
@@ -134,8 +146,11 @@ enum SCROLL_HITTEST
 };
 
 /* The window context stores data for the window needed through the life of the window */
-typedef struct _WND_CONTEXT
+typedef struct _WND_DATA
 {
+    HTHEME hthemeWindow;
+    HTHEME hthemeScrollbar;
+
     UINT lastHitTest;
     BOOL HasAppDefinedRgn;
     BOOL HasThemeRgn;
@@ -151,7 +166,7 @@ typedef struct _WND_CONTEXT
     INT  SCROLL_TrackingBar;
     INT  SCROLL_TrackingPos;
     INT  SCROLL_TrackingVal;
-} WND_CONTEXT, *PWND_CONTEXT;
+} WND_DATA, *PWND_DATA;
 
 /* The draw context stores data that are needed by the drawing operations in the non client area of the window */
 typedef struct _DRAW_CONTEXT
@@ -228,7 +243,9 @@ void  ThemeDrawScrollBar(PDRAW_CONTEXT pcontext, INT Bar, POINT* pt);
 VOID NC_TrackScrollBar(HWND Wnd, WPARAM wParam, POINT Pt);
 void ThemeInitDrawContext(PDRAW_CONTEXT pcontext, HWND hWnd, HRGN hRgn);
 void ThemeCleanupDrawContext(PDRAW_CONTEXT pcontext);
-PWND_CONTEXT ThemeGetWndContext(HWND hWnd);
+PWND_DATA ThemeGetWndData(HWND hWnd);
+HTHEME GetNCCaptionTheme(HWND hWnd, DWORD style);
+HTHEME GetNCScrollbarTheme(HWND hWnd, DWORD style);
 
 extern HINSTANCE hDllInst;
 extern ATOM atWindowTheme;

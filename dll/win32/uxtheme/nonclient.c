@@ -100,18 +100,7 @@ UserGetWindowIcon(PDRAW_CONTEXT pcontext)
     return hIcon;
 }
 
-WCHAR *UserGetWindowCaption(HWND hwnd)
-{
-    INT len = 512;
-    WCHAR *text;
-    text = (WCHAR*)HeapAlloc(GetProcessHeap(), 0, len  * sizeof(WCHAR));
-    if (text) InternalGetWindowText(hwnd, text, len);
-    return text;
-}
-
-HRESULT WINAPI ThemeDrawCaptionText(HTHEME hTheme, HDC hdc, int iPartId, int iStateId,
-                             LPCWSTR pszText, int iCharCount, DWORD dwTextFlags,
-                             DWORD dwTextFlags2, const RECT *pRect, BOOL Active)
+HRESULT WINAPI ThemeDrawCaptionText(PDRAW_CONTEXT pcontext, RECT* pRect, int iPartId, int iStateId)
 {
     HRESULT hr;
     HFONT hFont = NULL;
@@ -119,34 +108,58 @@ HRESULT WINAPI ThemeDrawCaptionText(HTHEME hTheme, HDC hdc, int iPartId, int iSt
     LOGFONTW logfont;
     COLORREF textColor;
     COLORREF oldTextColor;
-    int oldBkMode;
-    RECT rt;
-    
-    hr = GetThemeSysFont(0,TMT_CAPTIONFONT,&logfont);
 
-    if(SUCCEEDED(hr)) {
-        hFont = CreateFontIndirectW(&logfont);
+    WCHAR buffer[50];
+    WCHAR *pszText = buffer;
+    INT len;
+
+    len = InternalGetWindowText(pcontext->hWnd, NULL, 0);
+    if (!len)
+        return S_OK;
+
+    len++; /* From now on this is the size of the buffer so include the null */
+
+    if (len > ARRAYSIZE(buffer))
+    {
+        pszText = HeapAlloc(GetProcessHeap(), 0, len  * sizeof(WCHAR));
+        if (!pszText)
+            return E_OUTOFMEMORY;
     }
-    CopyRect(&rt, pRect);
+
+    InternalGetWindowText(pcontext->hWnd, pszText, len);
+
+    hr = GetThemeSysFont(0,TMT_CAPTIONFONT,&logfont);
+    if(SUCCEEDED(hr))
+        hFont = CreateFontIndirectW(&logfont);
+
     if(hFont)
-        oldFont = SelectObject(hdc, hFont);
+        oldFont = SelectObject(pcontext->hDC, hFont);
         
-    if(dwTextFlags2 & DTT_GRAYED)
-        textColor = GetSysColor(COLOR_GRAYTEXT);
-    else if (!Active)
+    if (!pcontext->Active)
         textColor = GetSysColor(COLOR_INACTIVECAPTIONTEXT);
     else
         textColor = GetSysColor(COLOR_CAPTIONTEXT);
-    
-    oldTextColor = SetTextColor(hdc, textColor);
-    oldBkMode = SetBkMode(hdc, TRANSPARENT);
-    DrawThemeText(hTheme, hdc, iPartId, iStateId, pszText, iCharCount, dwTextFlags, dwTextFlags, pRect);
-    SetBkMode(hdc, oldBkMode);
-    SetTextColor(hdc, oldTextColor);
 
-    if(hFont) {
-        SelectObject(hdc, oldFont);
+    oldTextColor = SetTextColor(pcontext->hDC, textColor);
+    DrawThemeText(pcontext->theme, 
+                  pcontext->hDC, 
+                  iPartId, 
+                  iStateId, 
+                  pszText, 
+                  len - 1, 
+                  DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, 
+                  0, 
+                  pRect);
+    SetTextColor(pcontext->hDC, oldTextColor);
+
+    if (hFont)
+    {
+        SelectObject(pcontext->hDC, oldFont);
         DeleteObject(hFont);
+    }
+    if (pszText != buffer)
+    {
+        HeapFree(GetProcessHeap(), 0, pszText);
     }
     return S_OK;
 }
@@ -160,8 +173,8 @@ ThemeInitDrawContext(PDRAW_CONTEXT pcontext,
     GetWindowInfo(hWnd, &pcontext->wi);
     pcontext->hWnd = hWnd;
     pcontext->Active = IsWindowActive(hWnd, pcontext->wi.dwExStyle);
-    pcontext->theme = MSSTYLES_OpenThemeClass(ActiveThemeFile, NULL, L"WINDOW");
-    pcontext->scrolltheme = MSSTYLES_OpenThemeClass(ActiveThemeFile, NULL, L"SCROLLBAR");
+    pcontext->theme = GetNCCaptionTheme(hWnd, pcontext->wi.dwStyle);
+    pcontext->scrolltheme = GetNCScrollbarTheme(hWnd, pcontext->wi.dwStyle);
 
     pcontext->CaptionHeight = pcontext->wi.cyWindowBorders;
     pcontext->CaptionHeight += GetSystemMetrics(pcontext->wi.dwExStyle & WS_EX_TOOLWINDOW ? SM_CYSMCAPTION : SM_CYCAPTION );
@@ -179,9 +192,6 @@ void
 ThemeCleanupDrawContext(PDRAW_CONTEXT pcontext)
 {
     ReleaseDC(pcontext->hWnd ,pcontext->hDC);
-
-    CloseThemeData (pcontext->theme);
-    CloseThemeData (pcontext->scrolltheme);
 
     if(pcontext->hRgn != NULL)
     {
@@ -321,7 +331,6 @@ ThemeDrawCaption(PDRAW_CONTEXT pcontext, RECT* prcCurrent)
     RECT rcPart;
     int iPart, iState;
     HICON hIcon;
-    WCHAR *CaptionText;
 
     // See also win32ss/user/ntuser/nonclient.c!UserDrawCaptionBar
     // and win32ss/user/ntuser/nonclient.c!UserDrawCaption
@@ -329,8 +338,6 @@ ThemeDrawCaption(PDRAW_CONTEXT pcontext, RECT* prcCurrent)
         hIcon = UserGetWindowIcon(pcontext);
     else
         hIcon = NULL;
-
-    CaptionText = UserGetWindowCaption(pcontext->hWnd);
 
     /* Get the caption part and state id */
     if (pcontext->wi.dwStyle & WS_MINIMIZE)
@@ -379,21 +386,7 @@ ThemeDrawCaption(PDRAW_CONTEXT pcontext, RECT* prcCurrent)
     rcPart.right -= 4;
 
     /* Draw the caption */
-    if (CaptionText)
-    {
-        /* FIXME: Use DrawThemeTextEx */
-        ThemeDrawCaptionText(pcontext->theme, 
-                             pcontext->hDC, 
-                             iPart,
-                             iState, 
-                             CaptionText, 
-                             lstrlenW(CaptionText), 
-                             DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, 
-                             0, 
-                             &rcPart,
-                             pcontext->Active);
-        HeapFree(GetProcessHeap(), 0, CaptionText);
-    }
+    ThemeDrawCaptionText(pcontext, &rcPart, iPart, iState);
 }
 
 static void 
@@ -600,7 +593,7 @@ ThemeHandleNcMouseMove(HWND hWnd, DWORD ht, POINT* pt)
     DRAW_CONTEXT context;
     TRACKMOUSEEVENT tme;
     DWORD style;
-    PWND_CONTEXT pcontext;
+    PWND_DATA pwndData;
 
     /* First of all check if we have something to do here */
     style = GetWindowLongW(hWnd, GWL_STYLE);
@@ -608,8 +601,8 @@ ThemeHandleNcMouseMove(HWND hWnd, DWORD ht, POINT* pt)
         return 0;
 
     /* Get theme data for this window */
-    pcontext = ThemeGetWndContext(hWnd);
-    if (pcontext == NULL)
+    pwndData = ThemeGetWndData(hWnd);
+    if (pwndData == NULL)
         return 0;
 
     /* Begin tracking in the non client area if we are not tracking yet */
@@ -627,24 +620,24 @@ ThemeHandleNcMouseMove(HWND hWnd, DWORD ht, POINT* pt)
     ThemeInitDrawContext(&context, hWnd, 0);
     if (context.wi.dwStyle & WS_SYSMENU)
     {
-        if (HT_ISBUTTON(ht) || HT_ISBUTTON(pcontext->lastHitTest))
+        if (HT_ISBUTTON(ht) || HT_ISBUTTON(pwndData->lastHitTest))
             ThemeDrawCaptionButtons(&context, ht, 0);
     }
 
    if (context.wi.dwStyle & WS_HSCROLL)
    {
-       if (ht == HTHSCROLL || pcontext->lastHitTest == HTHSCROLL)
+       if (ht == HTHSCROLL || pwndData->lastHitTest == HTHSCROLL)
            ThemeDrawScrollBar(&context, SB_HORZ , ht == HTHSCROLL ? pt : NULL);
    }
 
     if (context.wi.dwStyle & WS_VSCROLL)
     {
-        if (ht == HTVSCROLL || pcontext->lastHitTest == HTVSCROLL)
+        if (ht == HTVSCROLL || pwndData->lastHitTest == HTVSCROLL)
             ThemeDrawScrollBar(&context, SB_VERT, ht == HTVSCROLL ? pt : NULL);
     }
     ThemeCleanupDrawContext(&context);
 
-    pcontext->lastHitTest = ht;
+    pwndData->lastHitTest = ht;
 
     return 0;
 }
@@ -654,7 +647,7 @@ ThemeHandleNcMouseLeave(HWND hWnd)
 {
     DRAW_CONTEXT context;
     DWORD style;
-    PWND_CONTEXT pWndContext;
+    PWND_DATA pwndData;
 
     /* First of all check if we have something to do here */
     style = GetWindowLongW(hWnd, GWL_STYLE);
@@ -662,23 +655,23 @@ ThemeHandleNcMouseLeave(HWND hWnd)
         return 0;
 
     /* Get theme data for this window */
-    pWndContext = ThemeGetWndContext(hWnd);
-    if (pWndContext == NULL)
+    pwndData = ThemeGetWndData(hWnd);
+    if (pwndData == NULL)
         return 0;
 
     ThemeInitDrawContext(&context, hWnd, 0);
-    if (context.wi.dwStyle & WS_SYSMENU && HT_ISBUTTON(pWndContext->lastHitTest))
+    if (context.wi.dwStyle & WS_SYSMENU && HT_ISBUTTON(pwndData->lastHitTest))
         ThemeDrawCaptionButtons(&context, 0, 0);
 
-   if (context.wi.dwStyle & WS_HSCROLL && pWndContext->lastHitTest == HTHSCROLL)
+   if (context.wi.dwStyle & WS_HSCROLL && pwndData->lastHitTest == HTHSCROLL)
         ThemeDrawScrollBar(&context, SB_HORZ,  NULL);
 
-    if (context.wi.dwStyle & WS_VSCROLL && pWndContext->lastHitTest == HTVSCROLL)
+    if (context.wi.dwStyle & WS_VSCROLL && pwndData->lastHitTest == HTVSCROLL)
         ThemeDrawScrollBar(&context, SB_VERT, NULL);
 
     ThemeCleanupDrawContext(&context);
 
-    pWndContext->lastHitTest = HTNOWHERE;
+    pwndData->lastHitTest = HTNOWHERE;
 
     return 0;
 }
@@ -691,7 +684,7 @@ ThemeHandleButton(HWND hWnd, WPARAM wParam)
     WPARAM SCMsg, ht;
     ULONG Style;
     DRAW_CONTEXT context;
-    PWND_CONTEXT pWndContext;
+    PWND_DATA pwndData;
 
     Style = GetWindowLongW(hWnd, GWL_STYLE);
     if (!((Style & WS_CAPTION) && (Style & WS_SYSMENU)))
@@ -717,13 +710,13 @@ ThemeHandleButton(HWND hWnd, WPARAM wParam)
     }
 
     /* Get theme data for this window */
-    pWndContext = ThemeGetWndContext(hWnd);
-    if (pWndContext == NULL)
+    pwndData = ThemeGetWndData(hWnd);
+    if (pwndData == NULL)
         return;
 
     ThemeInitDrawContext(&context, hWnd, 0);
     ThemeDrawCaptionButtons(&context, 0,  wParam);
-    pWndContext->lastHitTest = wParam;
+    pwndData->lastHitTest = wParam;
 
     SetCapture(hWnd);
 
@@ -744,11 +737,11 @@ ThemeHandleButton(HWND hWnd, WPARAM wParam)
         Pressed = (ht == wParam);
 
         /* Only draw the buttons if the hit test changed */
-        if (ht != pWndContext->lastHitTest &&
-            (HT_ISBUTTON(ht) || HT_ISBUTTON(pWndContext->lastHitTest)))
+        if (ht != pwndData->lastHitTest &&
+            (HT_ISBUTTON(ht) || HT_ISBUTTON(pwndData->lastHitTest)))
         {
             ThemeDrawCaptionButtons(&context, 0, Pressed ? wParam: 0);
-            pWndContext->lastHitTest = ht;
+            pwndData->lastHitTest = ht;
         }
     }
 
@@ -1119,7 +1112,10 @@ HRESULT WINAPI DrawNCPreview(HDC hDC,
     /* Paint the window on the preview hDC */
     rcCurrent = context.wi.rcWindow;
     ThemePaintWindow(&context, &rcCurrent, FALSE);
+    
     context.hDC = NULL;
+    CloseThemeData (context.theme);
+    CloseThemeData (context.scrolltheme);
     ThemeCleanupDrawContext(&context);
 
     /* Cleanup */

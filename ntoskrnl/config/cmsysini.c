@@ -1179,7 +1179,7 @@ CmpCreateRegistryRoot(VOID)
 
 NTSTATUS
 NTAPI
-CmpGetRegistryPath(IN PWCHAR ConfigPath)
+CmpGetRegistryPath(OUT PWCHAR ConfigPath)
 {
     OBJECT_ATTRIBUTES ObjectAttributes;
     NTSTATUS Status;
@@ -1192,6 +1192,8 @@ CmpGetRegistryPath(IN PWCHAR ConfigPath)
     /* Check if we are booted in setup */
     if (ExpInTextModeSetup)
     {
+        DPRINT1("CmpGetRegistryPath TextMode setup HACK!!\n");
+
         /* Setup the object attributes */
         InitializeObjectAttributes(&ObjectAttributes,
                                    &KeyName,
@@ -1245,6 +1247,8 @@ CmpGetRegistryPath(IN PWCHAR ConfigPath)
     /* Add registry path */
     wcscat(ConfigPath, L"\\System32\\Config\\");
 
+    DPRINT1("CmpGetRegistryPath: ConfigPath = '%S'\n", ConfigPath);
+
     /* Done */
     return STATUS_SUCCESS;
 }
@@ -1257,7 +1261,6 @@ CmpLoadHiveThread(IN PVOID StartContext)
     UNICODE_STRING TempName, FileName, RegName;
     ULONG i, ErrorResponse, WorkerCount, Length;
     USHORT FileStart;
-    //ULONG RegStart;
     ULONG PrimaryDisposition, SecondaryDisposition, ClusterSize;
     PCMHIVE CmHive;
     HANDLE PrimaryHandle = NULL, LogHandle = NULL;
@@ -1273,36 +1276,35 @@ CmpLoadHiveThread(IN PVOID StartContext)
     CmpMachineHiveList[i].ThreadStarted = TRUE;
 
     /* Build the file name and registry name strings */
-    RtlInitEmptyUnicodeString(&FileName, FileBuffer, MAX_PATH);
-    RtlInitEmptyUnicodeString(&RegName, RegBuffer, MAX_PATH);
+    RtlInitEmptyUnicodeString(&FileName, FileBuffer, sizeof(FileBuffer));
+    RtlInitEmptyUnicodeString(&RegName, RegBuffer, sizeof(RegBuffer));
 
     /* Now build the system root path */
     CmpGetRegistryPath(ConfigPath);
     RtlInitUnicodeString(&TempName, ConfigPath);
-    RtlAppendStringToString((PSTRING)&FileName, (PSTRING)&TempName);
+    RtlAppendUnicodeStringToString(&FileName, &TempName);
     FileStart = FileName.Length;
 
     /* And build the registry root path */
     RtlInitUnicodeString(&TempName, L"\\REGISTRY\\");
-    RtlAppendStringToString((PSTRING)&RegName, (PSTRING)&TempName);
-    //RegStart = RegName.Length;
+    RtlAppendUnicodeStringToString(&RegName, &TempName);
 
     /* Build the base name */
     RtlInitUnicodeString(&TempName, CmpMachineHiveList[i].BaseName);
-    RtlAppendStringToString((PSTRING)&RegName, (PSTRING)&TempName);
+    RtlAppendUnicodeStringToString(&RegName, &TempName);
 
     /* Check if this is a child of the root */
-    if (RegName.Buffer[RegName.Length / sizeof(WCHAR) - 1] == '\\')
+    if (RegName.Buffer[RegName.Length / sizeof(WCHAR) - 1] == OBJ_NAME_PATH_SEPARATOR)
     {
         /* Then setup the whole name */
         RtlInitUnicodeString(&TempName, CmpMachineHiveList[i].Name);
-        RtlAppendStringToString((PSTRING)&RegName, (PSTRING)&TempName);
+        RtlAppendUnicodeStringToString(&RegName, &TempName);
     }
 
     /* Now add the rest of the file name */
     RtlInitUnicodeString(&TempName, CmpMachineHiveList[i].Name);
     FileName.Length = FileStart;
-    RtlAppendStringToString((PSTRING)&FileName, (PSTRING)&TempName);
+    RtlAppendUnicodeStringToString(&FileName, &TempName);
     if (!CmpMachineHiveList[i].CmHive)
     {
         /* We need to allocate a new hive structure */
@@ -1426,17 +1428,17 @@ CmpInitializeHiveList(IN USHORT Flag)
     CmpNoWrite = FALSE;
 
     /* Build the file name and registry name strings */
-    RtlInitEmptyUnicodeString(&FileName, FileBuffer, MAX_PATH);
-    RtlInitEmptyUnicodeString(&RegName, RegBuffer, MAX_PATH);
+    RtlInitEmptyUnicodeString(&FileName, FileBuffer, sizeof(FileBuffer));
+    RtlInitEmptyUnicodeString(&RegName, RegBuffer, sizeof(RegBuffer));
 
     /* Now build the system root path */
     CmpGetRegistryPath(ConfigPath);
     RtlInitUnicodeString(&TempName, ConfigPath);
-    RtlAppendStringToString((PSTRING)&FileName, (PSTRING)&TempName);
+    RtlAppendUnicodeStringToString(&FileName, &TempName);
 
     /* And build the registry root path */
     RtlInitUnicodeString(&TempName, L"\\REGISTRY\\");
-    RtlAppendStringToString((PSTRING)&RegName, (PSTRING)&TempName);
+    RtlAppendUnicodeStringToString(&RegName, &TempName);
     RegStart = RegName.Length;
 
     /* Setup the event to synchronize workers */
@@ -1504,14 +1506,14 @@ CmpInitializeHiveList(IN USHORT Flag)
             /* Build the base name */
             RegName.Length = RegStart;
             RtlInitUnicodeString(&TempName, CmpMachineHiveList[i].BaseName);
-            RtlAppendStringToString((PSTRING)&RegName, (PSTRING)&TempName);
+            RtlAppendUnicodeStringToString(&RegName, &TempName);
 
             /* Check if this is a child of the root */
-            if (RegName.Buffer[RegName.Length / sizeof(WCHAR) - 1] == '\\')
+            if (RegName.Buffer[RegName.Length / sizeof(WCHAR) - 1] == OBJ_NAME_PATH_SEPARATOR)
             {
                 /* Then setup the whole name */
                 RtlInitUnicodeString(&TempName, CmpMachineHiveList[i].Name);
-                RtlAppendStringToString((PSTRING)&RegName, (PSTRING)&TempName);
+                RtlAppendUnicodeStringToString(&RegName, &TempName);
             }
 
             /* Now link the hive to its master */

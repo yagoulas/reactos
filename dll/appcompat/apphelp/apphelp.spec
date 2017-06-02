@@ -3,7 +3,7 @@
 @ stdcall ApphelpCheckInstallShieldPackage(ptr wstr)
 @ stub ApphelpCheckMsiPackage
 @ stub ApphelpCheckRunApp
-@ stub ApphelpCheckRunAppEx
+@ stdcall ApphelpCheckRunAppEx(ptr ptr ptr wstr ptr long ptr ptr ptr ptr ptr ptr ptr ptr)
 @ stdcall ApphelpCheckShellObject(ptr long ptr)
 @ stub ApphelpCreateAppcompatData
 @ stub ApphelpFixMsiPackage
@@ -157,17 +157,19 @@
 @ stdcall SdbWriteStringTag(ptr long wstr)
 @ stub SdbWriteStringTagDirect
 @ stdcall SdbWriteWORDTag(ptr long long)
-@ stub SE_DllLoaded
-@ stub SE_DllUnloaded
+@ stdcall SE_DllLoaded(ptr)
+@ stdcall SE_DllUnloaded(ptr)
+@ stub SE_DynamicShim
+@ stub SE_DynamicUnshim
+@ stdcall SE_InstallAfterInit(ptr ptr)
+@ stdcall SE_InstallBeforeInit(ptr ptr)
+@ stdcall SE_IsShimDll(ptr)
+@ stdcall SE_ProcessDying()
 @ stub SE_GetHookAPIs
 @ stub SE_GetMaxShimCount
 @ stub SE_GetProcAddressLoad
 @ stub SE_GetShimCount
-@ stub SE_InstallAfterInit
-@ stub SE_InstallBeforeInit
-@ stub SE_IsShimDll
 @ stub SE_LdrEntryRemoved
-@ stub SE_ProcessDying
 @ stub SetPermLayers
 @ cdecl ShimDbgPrint(long str str)
 @ stub ShimDumpCache

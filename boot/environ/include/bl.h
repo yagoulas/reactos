@@ -329,12 +329,14 @@ typedef enum _BL_MEMORY_TYPE
     BlUnusableMemory = 0xF0000002,
     BlReservedMemory = 0xF0000003,
     BlEfiBootMemory = 0xF0000004,
-    BlEfiRuntimeMemory = 0xF0000006,
+    BlConventionalZeroedMemory = 0xF000005,
+    BlEfiRuntimeCodeMemory = 0xF0000006,
     BlAcpiReclaimMemory = 0xF0000008,
     BlAcpiNvsMemory = 0xF0000009,
     BlDeviceIoMemory = 0xF000000A,
     BlDevicePortMemory = 0xF000000B,
     BlPalMemory = 0xF000000C,
+    BlEfiRuntimeDataMemory = 0xF000000E,
 } BL_MEMORY_TYPE;
 
 typedef enum _BL_MEMORY_ATTR
@@ -1826,6 +1828,12 @@ BlHtStore (
     );
 
 NTSTATUS
+BlHtDelete (
+    _In_ ULONG TableId,
+    _In_ PBL_HASH_ENTRY Entry
+    );
+
+NTSTATUS
 BlHtLookup (
     _In_ ULONG TableId,
     _In_ PBL_HASH_ENTRY Entry,
@@ -2021,9 +2029,10 @@ Archx86TransferTo32BitApplicationAsm (
 
 VOID
 MmMdDbgDumpList (
-    _In_ PBL_MEMORY_DESCRIPTOR_LIST DescriptorList
+    _In_ PBL_MEMORY_DESCRIPTOR_LIST DescriptorList,
+    _In_opt_ ULONG MaxCount
 );
-    
+
 VOID
 MmMdInitializeList (
     _In_ PBL_MEMORY_DESCRIPTOR_LIST DescriptorList,
@@ -2086,6 +2095,13 @@ MmMdAddDescriptorToList (
     _In_ ULONG Flags
     );
 
+NTSTATUS
+MmMdTruncateDescriptors (
+    _In_ PBL_MEMORY_DESCRIPTOR_LIST MdList,
+    _In_ PBL_MEMORY_DESCRIPTOR_LIST NewList,
+    _In_ ULONGLONG BasePage
+    );
+
 VOID
 MmMdRemoveDescriptorFromList (
     _In_ PBL_MEMORY_DESCRIPTOR_LIST MdList,
@@ -2120,6 +2136,11 @@ MmMdFreeDescriptor (
     );
 
 /* PAGE ALLOCATOR ROUTINES ***************************************************/
+
+NTSTATUS
+MmPaTruncateMemory (
+    _In_ ULONGLONG BasePage
+    );
 
 NTSTATUS
 BlMmAllocatePhysicalPages(
