@@ -394,10 +394,11 @@ NTAPI
 INIT_FUNCTION
 CmpSetSystemValues(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
 {
-    OBJECT_ATTRIBUTES ObjectAttributes;
-    UNICODE_STRING KeyName, ValueName = { 0, 0, NULL };
-    HANDLE KeyHandle = NULL;
     NTSTATUS Status;
+    OBJECT_ATTRIBUTES ObjectAttributes;
+    HANDLE KeyHandle;
+    UNICODE_STRING KeyName, ValueName = { 0, 0, NULL };
+
     ASSERT(LoaderBlock != NULL);
 
     /* Setup attributes for loader options */
@@ -410,9 +411,10 @@ CmpSetSystemValues(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
                                NULL,
                                NULL);
     Status = NtOpenKey(&KeyHandle, KEY_WRITE, &ObjectAttributes);
-    if (!NT_SUCCESS(Status)) goto Quickie;
+    if (!NT_SUCCESS(Status))
+        return Status;
 
-    /* Key opened, now write to the key */
+    /* Setup the value for the system start options */
     RtlInitUnicodeString(&KeyName, L"SystemStartOptions");
     Status = NtSetValueKey(KeyHandle,
                            &KeyName,
@@ -420,9 +422,10 @@ CmpSetSystemValues(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
                            REG_SZ,
                            CmpLoadOptions.Buffer,
                            CmpLoadOptions.Length);
-    if (!NT_SUCCESS(Status)) goto Quickie;
+    if (!NT_SUCCESS(Status))
+        goto Quit;
 
-    /* Setup value name for system boot device in ARC format */
+    /* Setup the value for the system boot device in ARC format */
     RtlInitUnicodeString(&KeyName, L"SystemBootDevice");
     RtlCreateUnicodeStringFromAsciiz(&ValueName, LoaderBlock->ArcBootDeviceName);
     Status = NtSetValueKey(KeyHandle,
@@ -432,15 +435,13 @@ CmpSetSystemValues(IN PLOADER_PARAMETER_BLOCK LoaderBlock)
                            ValueName.Buffer,
                            ValueName.Length);
 
-Quickie:
-    /* Free the buffers */
+    /* Free the temporary string */
     RtlFreeUnicodeString(&ValueName);
 
+Quit:
     /* Close the key and return */
-    if (KeyHandle) NtClose(KeyHandle);
-
-    /* Return the status */
-    return (ExpInTextModeSetup ? STATUS_SUCCESS : Status);
+    NtClose(KeyHandle);
+    return Status;
 }
 
 static
@@ -1413,7 +1414,7 @@ CmpLoadHiveThread(IN PVOID StartContext)
 
 VOID
 NTAPI
-CmpInitializeHiveList(IN USHORT Flag)
+CmpInitializeHiveList(VOID)
 {
     WCHAR FileBuffer[MAX_PATH], RegBuffer[MAX_PATH], ConfigPath[MAX_PATH];
     UNICODE_STRING TempName, FileName, RegName;
