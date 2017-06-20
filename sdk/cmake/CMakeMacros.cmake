@@ -766,8 +766,8 @@ function(create_registry_hives)
     # FIXME: Should use hivesys_utf16.inf instead!
     add_custom_command(
         OUTPUT ${CMAKE_BINARY_DIR}/boot/bootdata/SETUPREG.HIV
-        COMMAND native-mkhive -h:SETUPREG -d:${CMAKE_BINARY_DIR}/boot/bootdata ${CMAKE_BINARY_DIR}/boot/bootdata/hivesetup_utf16.inf
-        DEPENDS native-mkhive ${CMAKE_BINARY_DIR}/boot/bootdata/hivesetup_utf16.inf)
+        COMMAND native-mkhive -h:SETUPREG -d:${CMAKE_BINARY_DIR}/boot/bootdata ${CMAKE_SOURCE_DIR}/boot/bootdata/hivesetup.inf
+        DEPENDS native-mkhive ${CMAKE_SOURCE_DIR}/boot/bootdata/hivesetup.inf)
 
     add_custom_target(bootcd_hives
         DEPENDS ${CMAKE_BINARY_DIR}/boot/bootdata/SETUPREG.HIV)

@@ -4824,7 +4824,7 @@ RxpQueryInfoMiniRdr(
     Fcb = (PFCB)RxContext->pFcb;
 
     /* Set the RX_CONTEXT */
-    RxContext->Info.FsInformationClass = FileInfoClass;
+    RxContext->Info.FileInformationClass = FileInfoClass;
     RxContext->Info.Buffer = Buffer;
 
     /* Pass down */
@@ -5406,14 +5406,14 @@ RxReadRegistryParameters(
     Status = ZwQueryValueKey(KeyHandle, &ParamName, KeyValuePartialInformation, PartialInfo, sizeof(Buffer), &ResultLength);
     if (NT_SUCCESS(Status) && PartialInfo->Type == REG_DWORD)
     {
-        DisableByteRangeLockingOnReadOnlyFiles = ((ULONG)PartialInfo->Data != 0);
+        DisableByteRangeLockingOnReadOnlyFiles = (*(PULONG)PartialInfo->Data != 0);
     }
 
     RtlInitUnicodeString(&ParamName, L"ReadAheadGranularity");
     Status = ZwQueryValueKey(KeyHandle, &ParamName, KeyValuePartialInformation, PartialInfo, sizeof(Buffer), &ResultLength);
     if (NT_SUCCESS(Status) && PartialInfo->Type == REG_DWORD)
     {
-        ULONG Granularity = (ULONG)PartialInfo->Data;
+        ULONG Granularity = *(PULONG)PartialInfo->Data;
 
         if (Granularity > 16)
         {
@@ -5427,7 +5427,7 @@ RxReadRegistryParameters(
     Status = ZwQueryValueKey(KeyHandle, &ParamName, KeyValuePartialInformation, PartialInfo, sizeof(Buffer), &ResultLength);
     if (NT_SUCCESS(Status) && PartialInfo->Type == REG_DWORD)
     {
-        DisableFlushOnCleanup = ((ULONG)PartialInfo->Data != 0);
+        DisableFlushOnCleanup = (*(PULONG)PartialInfo->Data != 0);
     }
 
     ZwClose(KeyHandle);

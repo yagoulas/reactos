@@ -1637,69 +1637,88 @@ CmQueryKey(_In_ PCM_KEY_CONTROL_BLOCK Kcb,
         goto Quickie;
     }
 
-    /* Check what class we got */
-    switch (KeyInformationClass)
+    /* Data can be user-mode, use SEH */
+    _SEH2_TRY
     {
-        /* Typical information */
-        case KeyFullInformation:
-        case KeyBasicInformation:
-        case KeyNodeInformation:
-
-            /* Get the hive and parent */
-            Hive = Kcb->KeyHive;
-            Parent = (PCM_KEY_NODE)HvGetCell(Hive, Kcb->KeyCell);
-            ASSERT(Parent);
-
-            /* Track cell references */
-            if (!HvTrackCellRef(&CellReferences, Hive, Kcb->KeyCell))
+        /* Check what class we got */
+        switch (KeyInformationClass)
+        {
+            /* Typical information */
+            case KeyFullInformation:
+            case KeyBasicInformation:
+            case KeyNodeInformation:
             {
-                /* Not enough memory to track references */
-                Status = STATUS_INSUFFICIENT_RESOURCES;
-            }
-            else
-            {
-                /* Call the internal API */
-                Status = CmpQueryKeyData(Hive,
-                                         Parent,
-                                         KeyInformationClass,
-                                         KeyInformation,
-                                         Length,
-                                         ResultLength);
-            }
-            break;
+                /* Get the hive and parent */
+                Hive = Kcb->KeyHive;
+                Parent = (PCM_KEY_NODE)HvGetCell(Hive, Kcb->KeyCell);
+                ASSERT(Parent);
 
-        case KeyCachedInformation:
-            /* Call the internal API */
-            Status = CmpQueryKeyDataFromCache(Kcb,
-                                              KeyInformation,
-                                              Length,
-                                              ResultLength);
-            break;
-
-        case KeyFlagsInformation:
-            /* Call the internal API */
-            Status = CmpQueryFlagsInformation(Kcb,
-                                              KeyInformation,
-                                              Length,
-                                              ResultLength);
-            break;
-
-        case KeyNameInformation:
-            /* Call the internal API */
-            Status = CmpQueryNameInformation(Kcb,
+                /* Track cell references */
+                if (!HvTrackCellRef(&CellReferences, Hive, Kcb->KeyCell))
+                {
+                    /* Not enough memory to track references */
+                    Status = STATUS_INSUFFICIENT_RESOURCES;
+                }
+                else
+                {
+                    /* Call the internal API */
+                    Status = CmpQueryKeyData(Hive,
+                                             Parent,
+                                             KeyInformationClass,
                                              KeyInformation,
                                              Length,
                                              ResultLength);
-            break;
+                }
+                break;
+            }
 
-        /* Illegal classes */
-        default:
+            case KeyCachedInformation:
+            {
+                /* Call the internal API */
+                Status = CmpQueryKeyDataFromCache(Kcb,
+                                                  KeyInformation,
+                                                  Length,
+                                                  ResultLength);
+                break;
+            }
 
-            /* Print message and fail */
-            DPRINT1("Unsupported class: %d!\n", KeyInformationClass);
-            Status = STATUS_INVALID_INFO_CLASS;
-            break;
+            case KeyFlagsInformation:
+            {
+                /* Call the internal API */
+                Status = CmpQueryFlagsInformation(Kcb,
+                                                  KeyInformation,
+                                                  Length,
+                                                  ResultLength);
+                break;
+            }
+
+            case KeyNameInformation:
+            {
+                /* Call the internal API */
+                Status = CmpQueryNameInformation(Kcb,
+                                                 KeyInformation,
+                                                 Length,
+                                                 ResultLength);
+                break;
+            }
+
+            /* Illegal classes */
+            default:
+            {
+                /* Print message and fail */
+                DPRINT1("Unsupported class: %d!\n", KeyInformationClass);
+                Status = STATUS_INVALID_INFO_CLASS;
+                break;
+            }
+        }
     }
+    _SEH2_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
+    {
+        /* Fail with exception code */
+        Status = _SEH2_GetExceptionCode();
+        _SEH2_YIELD(goto Quickie);
+    }
+    _SEH2_END;
 
 Quickie:
     /* Release references */
@@ -1967,7 +1986,7 @@ CmFlushKey(IN PCM_KEY_CONTROL_BLOCK Kcb,
         }
 
         /* Release the flush lock */
-        CmpUnlockHiveFlusher((PCMHIVE)Hive);
+        CmpUnlockHiveFlusher(CmHive);
     }
 
     /* Return the status */
@@ -2013,9 +2032,6 @@ CmLoadKey(IN POBJECT_ATTRIBUTES TargetKey,
     }
 
     /* Open the target key */
-#if 0
-    Status = ZwOpenKey(&KeyHandle, KEY_READ, TargetKey);
-#else
     RtlZeroMemory(&ParseContext, sizeof(ParseContext));
     ParseContext.CreateOperation = FALSE;
     Status = ObOpenObjectByName(TargetKey,
@@ -2025,7 +2041,6 @@ CmLoadKey(IN POBJECT_ATTRIBUTES TargetKey,
                                 KEY_READ,
                                 &ParseContext,
                                 &KeyHandle);
-#endif
     if (!NT_SUCCESS(Status)) KeyHandle = NULL;
 
     /* Open the hive */
@@ -2112,7 +2127,7 @@ CmLoadKey(IN POBJECT_ATTRIBUTES TargetKey,
     }
 
     /* Is this first profile load? */
-    if (!(CmpProfileLoaded) && !(CmpWasSetupBoot))
+    if (!CmpProfileLoaded && !CmpWasSetupBoot)
     {
         /* User is now logged on, set quotas */
         CmpProfileLoaded = TRUE;
@@ -2130,7 +2145,7 @@ CmLoadKey(IN POBJECT_ATTRIBUTES TargetKey,
 static
 BOOLEAN
 NTAPI
-CmpUnlinkHiveFromMaster(IN PHHIVE Hive,
+CmpUnlinkHiveFromMaster(IN PCMHIVE CmHive,
                         IN HCELL_INDEX Cell)
 {
     PCELL_DATA CellData;
@@ -2140,13 +2155,13 @@ CmpUnlinkHiveFromMaster(IN PHHIVE Hive,
     DPRINT("CmpUnlinkHiveFromMaster()\n");
 
     /* Get the cell data */
-    CellData = HvGetCell(Hive, Cell);
+    CellData = HvGetCell(&CmHive->Hive, Cell);
     if (CellData == NULL)
         return FALSE;
 
     /* Get the link cell and release the current cell */
     LinkCell = CellData->u.KeyNode.Parent;
-    HvReleaseCell(Hive, Cell);
+    HvReleaseCell(&CmHive->Hive, Cell);
 
     /* Remove the link cell from the master hive */
     CmpLockHiveFlusherExclusive(CmiVolatileHive);
@@ -2160,13 +2175,9 @@ CmpUnlinkHiveFromMaster(IN PHHIVE Hive,
         return FALSE;
     }
 
-    /* Lock the hive list */
+    /* Remove the hive from the list */
     ExAcquirePushLockExclusive(&CmpHiveListHeadLock);
-
-    /* Remove this hive */
-    RemoveEntryList(&((PCMHIVE)Hive)->HiveList);
-
-    /* Release the lock */
+    RemoveEntryList(&CmHive->HiveList);
     ExReleasePushLock(&CmpHiveListHeadLock);
 
     return TRUE;
@@ -2202,17 +2213,37 @@ CmUnloadKey(IN PCM_KEY_CONTROL_BLOCK Kcb,
         return STATUS_INVALID_PARAMETER;
     }
 
+    /* Mark this hive as being unloaded */
+    Hive->HiveFlags |= HIVE_IS_UNLOADING;
+
+    /* Search for any opened keys in this hive, and take an appropriate action */
+    if (Kcb->RefCount > 1)
+    {
+        if (Flags != REG_FORCE_UNLOAD)
+        {
+            if (CmCountOpenSubKeys(Kcb, FALSE) != 0)
+            {
+                /* There are open subkeys but we don't force hive unloading, fail */
+                Hive->HiveFlags &= ~HIVE_IS_UNLOADING;
+                return STATUS_CANNOT_DELETE;
+            }
+        }
+        else
+        {
+            DPRINT1("CmUnloadKey: Force unloading is UNIMPLEMENTED, expect dangling KCBs problems!\n");
+        }
+    }
+
     /* Flush the hive */
     CmFlushKey(Kcb, TRUE);
 
     /* Unlink the hive from the master hive */
-    if (!CmpUnlinkHiveFromMaster(Hive, Cell))
+    if (!CmpUnlinkHiveFromMaster(CmHive, Cell))
     {
         DPRINT("CmpUnlinkHiveFromMaster() failed!\n");
 
-        /* Remove the unloading flag */
+        /* Remove the unloading flag and return failure */
         Hive->HiveFlags &= ~HIVE_IS_UNLOADING;
-
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
@@ -2247,15 +2278,15 @@ CmUnloadKey(IN PCM_KEY_CONTROL_BLOCK Kcb,
     /* Destroy the view list */
     CmpDestroyHiveViewList(CmHive);
 
-    /* Free the hive storage */
-    HvFree(Hive);
-
     /* Delete the flusher lock */
     ExDeleteResourceLite(CmHive->FlusherLock);
     ExFreePoolWithTag(CmHive->FlusherLock, TAG_CMHIVE);
 
     /* Delete the view lock */
     ExFreePoolWithTag(CmHive->ViewLock, TAG_CMHIVE);
+
+    /* Free the hive storage */
+    HvFree(Hive);
 
     /* Free the hive */
     CmpFree(CmHive, TAG_CM);
@@ -2280,7 +2311,7 @@ CmCountOpenSubKeys(IN PCM_KEY_CONTROL_BLOCK RootKcb,
     /* The root key is the only referenced key. There are no refereced sub keys. */
     if (RootKcb->RefCount == 1)
     {
-        DPRINT("open sub keys: 0\n");
+        DPRINT("Open sub keys: 0\n");
         return 0;
     }
 
@@ -2312,8 +2343,7 @@ CmCountOpenSubKeys(IN PCM_KEY_CONTROL_BLOCK RootKcb,
                 /* Check whether the parent is the root key */
                 if (ParentKcb == RootKcb)
                 {
-                    DPRINT("Found a sub key \n");
-                    DPRINT("RefCount = %u\n", CachedKcb->RefCount);
+                    DPRINT("Found a sub key, RefCount = %u\n", CachedKcb->RefCount);
 
                     if (CachedKcb->RefCount > 0)
                     {
@@ -2340,8 +2370,7 @@ CmCountOpenSubKeys(IN PCM_KEY_CONTROL_BLOCK RootKcb,
         }
     }
 
-    DPRINT("open sub keys: %u\n", SubKeys);
-
+    DPRINT("Open sub keys: %u\n", SubKeys);
     return SubKeys;
 }
 
