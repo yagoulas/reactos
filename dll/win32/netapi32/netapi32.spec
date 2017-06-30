@@ -39,13 +39,13 @@
 @ stub DsValidateSubnetNameA
 @ stub DsValidateSubnetNameW
 @ stub I_BrowserDebugCall
-@ stub I_BrowserDebugTrace
+@ stdcall I_BrowserDebugTrace(wstr str)
 @ stdcall I_BrowserQueryEmulatedDomains(wstr ptr ptr)
-@ stub I_BrowserQueryOtherDomains
-@ stub I_BrowserQueryStatistics
-@ stub I_BrowserResetNetlogonState
+@ stdcall I_BrowserQueryOtherDomains(wstr ptr ptr ptr)
+@ stdcall I_BrowserQueryStatistics(wstr ptr)
+@ stdcall I_BrowserResetNetlogonState(wstr)
 @ stdcall I_BrowserResetStatistics(wstr)
-@ stub I_BrowserServerEnum
+@ stdcall I_BrowserServerEnum(wstr wstr wstr long ptr long ptr ptr long wstr ptr)
 @ stdcall I_BrowserSetNetlogonState(wstr wstr wstr long)
 @ stub I_NetAccountDeltas
 @ stub I_NetAccountSync
@@ -109,7 +109,7 @@
 @ stdcall NetAuditClear(wstr wstr wstr)
 @ stdcall NetAuditRead(wstr wstr ptr long ptr long long ptr long ptr ptr)
 @ stdcall NetAuditWrite(long ptr long wstr ptr)
-@ stub NetBrowserStatisticsGet
+@ stdcall NetBrowserStatisticsGet(wstr long ptr)
 @ stdcall NetConfigGet(wstr wstr wstr ptr)
 @ stdcall NetConfigGetAll(wstr wstr ptr)
 @ stdcall NetConfigSet(wstr wstr wstr long long ptr long)
