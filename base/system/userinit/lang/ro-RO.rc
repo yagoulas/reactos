@@ -14,7 +14,7 @@ BEGIN
     COMBOBOX IDC_LAYOUTLIST, 132, 130, 176, 81, CBS_DROPDOWNLIST | CBS_SORT | WS_VSCROLL | WS_CHILD | WS_VISIBLE | WS_TABSTOP
     LTEXT "Selectați limba și aranjamentul de tastatură apoi apăsați „Înainte” pentru a continua.", IDC_STATIC, 7, 152, 300, 8
 
-    GROUPBOX "", IDC_STATIC, 0, 165, 317, 1
+    CONTROL "", IDC_STATIC, "STATIC", SS_ETCHEDHORZ, 0, 165, 317, 1
     DEFPUSHBUTTON "În&ainte", IDOK, 205, 172, 50, 14
     PUSHBUTTON "A&nulează", IDCANCEL, 260, 172, 50, 14
 END
@@ -28,9 +28,9 @@ BEGIN
     DEFPUSHBUTTON "Lansează ReactOS &Live CD", IDC_RUN, 71, 102, 175, 21
     PUSHBUTTON "&Instalează ReactOS", IDC_INSTALL, 71, 130, 175, 21
 
-    LTEXT "", IDC_STATIC, 7, 152, 300, 8
+    // LTEXT "", IDC_STATIC, 7, 152, 300, 8
 
-    GROUPBOX "", IDC_STATIC, 0, 165, 317, 1
+    CONTROL "", IDC_STATIC, "STATIC", SS_ETCHEDHORZ, 0, 165, 317, 1
     PUSHBUTTON "În&apoi", IDOK, 205, 172, 50, 14
     PUSHBUTTON "A&nulează", IDCANCEL, 260, 172, 50, 14
 END
