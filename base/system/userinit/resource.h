@@ -26,8 +26,6 @@
 /* Strings */
 #define IDS_SHELL_FAIL       600
 #define IDS_INSTALLER_FAIL   601
-
-
-
+#define IDS_CANCEL_CONFIRM   602
 
 #define IDS_SPAIN 3900

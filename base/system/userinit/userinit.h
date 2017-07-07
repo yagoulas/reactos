@@ -39,7 +39,8 @@ typedef enum
 typedef enum
 {
     SHELL,
-    INSTALLER
+    INSTALLER,
+    REBOOT
 } RUN;
 
 typedef struct _IMGINFO

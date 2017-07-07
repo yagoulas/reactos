@@ -564,9 +564,6 @@ LocaleDlgProc(
             /* Fill the language and keyboard layout lists */
             CreateLanguagesList(GetDlgItem(hwndDlg, IDC_LANGUAGELIST));
             CreateKeyboardLayoutList(GetDlgItem(hwndDlg, IDC_LAYOUTLIST));
-
-            /* Disable the 'Cancel' button*/
-            EnableWindow(GetDlgItem(hwndDlg, IDCANCEL), FALSE);
             return FALSE;
 
         case WM_DRAWITEM:
@@ -631,13 +628,29 @@ LocaleDlgProc(
                         /* Set the locale for the current thread */
                         NtSetDefaultLocale(TRUE, NewLcid);
 
-                        /* Store the locale setings in the registry */
+                        /* Store the locale settings in the registry */
                         InitializeDefaultUserLocale(&NewLcid);
 
                         SetKeyboardLayout(GetDlgItem(hwndDlg, IDC_LAYOUTLIST));
 
                         pState->NextPage = STARTPAGE;
-                        EndDialog(hwndDlg, 0);
+                        EndDialog(hwndDlg, LOWORD(wParam));
+                    }
+                    break;
+
+                case IDCANCEL:
+                    if (HIWORD(wParam) == BN_CLICKED)
+                    {
+                        static WCHAR szMsg[RC_STRING_MAX_SIZE];
+                        INT ret;
+                        LoadStringW(GetModuleHandle(NULL), IDS_CANCEL_CONFIRM, szMsg, ARRAYSIZE(szMsg));
+                        ret = MessageBoxW(hwndDlg, szMsg, L"ReactOS LiveCD", MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2);
+                        if (ret == IDOK || ret == IDYES)
+                        {
+                            pState->NextPage = DONE;
+                            pState->Run = REBOOT;
+                            EndDialog(hwndDlg, LOWORD(wParam));
+                        }
                     }
                     break;
 
@@ -677,8 +690,6 @@ StartDlgProc(
 
             /* Center the dialog window */
             CenterWindow(hwndDlg);
-
-            EnableWindow(GetDlgItem(hwndDlg, IDCANCEL), FALSE);
             return FALSE;
 
         case WM_DRAWITEM:
@@ -695,18 +706,34 @@ StartDlgProc(
                     case IDC_RUN:
                         pState->NextPage = DONE;
                         pState->Run = SHELL;
-                        EndDialog(hwndDlg, 0);
+                        EndDialog(hwndDlg, LOWORD(wParam));
                         break;
 
                     case IDC_INSTALL:
                         pState->NextPage = DONE;
                         pState->Run = INSTALLER;
-                        EndDialog(hwndDlg, 0);
+                        EndDialog(hwndDlg, LOWORD(wParam));
                         break;
 
                     case IDOK:
                         pState->NextPage = LOCALEPAGE;
-                        EndDialog(hwndDlg, 0);
+                        EndDialog(hwndDlg, LOWORD(wParam));
+                        break;
+
+                    case IDCANCEL:
+                        if (HIWORD(wParam) == BN_CLICKED)
+                        {
+                            static WCHAR szMsg[RC_STRING_MAX_SIZE];
+                            INT ret;
+                            LoadStringW(GetModuleHandle(NULL), IDS_CANCEL_CONFIRM, szMsg, ARRAYSIZE(szMsg));
+                            ret = MessageBoxW(hwndDlg, szMsg, L"ReactOS LiveCD", MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2);
+                            if (ret == IDOK || ret == IDYES)
+                            {
+                                pState->NextPage = DONE;
+                                pState->Run = REBOOT;
+                                EndDialog(hwndDlg, LOWORD(wParam));
+                            }
+                        }
                         break;
 
                     default:
