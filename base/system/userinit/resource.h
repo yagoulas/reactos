@@ -4,6 +4,7 @@
 
 /* Bitmaps */
 #define IDB_ROSLOGO          100
+#define IDB_ROSMASK          101
 
 #define IDC_STATIC -1
 

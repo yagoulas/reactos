@@ -48,6 +48,8 @@ typedef struct _IMGINFO
     HBITMAP hBitmap;
     INT cxSource;
     INT cySource;
+    INT iPlanes;
+    INT iBits;
 } IMGINFO, *PIMGINFO;
 
 typedef struct
