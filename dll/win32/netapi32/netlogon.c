@@ -9,7 +9,10 @@
 /* INCLUDES ******************************************************************/
 
 #include "netapi32.h"
+#include <winsock2.h>
 #include <rpc.h>
+#include <dsrole.h>
+#include <dsgetdc.h>
 #include "netlogon_c.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(netapi32);
@@ -71,16 +74,533 @@ LOGONSRV_HANDLE_unbind(LOGONSRV_HANDLE pszSystemName,
 }
 
 
+DWORD
+WINAPI
+DsAddressToSiteNamesA(
+    _In_opt_ LPCSTR ComputerName,
+    _In_ DWORD EntryCount,
+    _In_ PSOCKET_ADDRESS SocketAddresses,
+    _Out_ LPSTR **SiteNames)
+{
+    FIXME("DsAddressToSiteNamesA(%s, %lu, %p, %p)\n",
+          debugstr_a(ComputerName), EntryCount, SocketAddresses, SiteNames);
+    return ERROR_CALL_NOT_IMPLEMENTED;
+}
+
+
+DWORD
+WINAPI
+DsAddressToSiteNamesW(
+    _In_opt_ LPCWSTR ComputerName,
+    _In_ DWORD EntryCount,
+    _In_ PSOCKET_ADDRESS SocketAddresses,
+    _Out_ LPWSTR **SiteNames)
+{
+    PNL_SITE_NAME_ARRAY SiteNameArray = NULL;
+    PWSTR *SiteNamesBuffer = NULL, Ptr;
+    ULONG BufferSize, i;
+    NET_API_STATUS status;
+
+    TRACE("DsAddressToSiteNamesW(%s, %lu, %p, %p)\n",
+          debugstr_w(ComputerName), EntryCount, SocketAddresses, SiteNames);
+
+    if (EntryCount == 0)
+        return ERROR_INVALID_PARAMETER;
+
+    *SiteNames = NULL;
+
+    RpcTryExcept
+    {
+        status = DsrAddressToSiteNamesW((PWSTR)ComputerName,
+                                        EntryCount,
+                                        (PNL_SOCKET_ADDRESS)SocketAddresses,
+                                        &SiteNameArray);
+        if (status == NERR_Success)
+        {
+            if (SiteNameArray->EntryCount == 0)
+            {
+                status = ERROR_INVALID_PARAMETER;
+            }
+            else
+            {
+                BufferSize = SiteNameArray->EntryCount * sizeof(PWSTR);
+                for (i = 0; i < SiteNameArray->EntryCount; i++)
+                    BufferSize += SiteNameArray->SiteNames[i].Length + sizeof(WCHAR);
+
+                status = NetApiBufferAllocate(BufferSize, (PVOID*)&SiteNamesBuffer);
+                if (status == NERR_Success)
+                {
+                    ZeroMemory(SiteNamesBuffer, BufferSize);
+
+                    Ptr = (PWSTR)((ULONG_PTR)SiteNamesBuffer + SiteNameArray->EntryCount * sizeof(PWSTR));
+                    for (i = 0; i < SiteNameArray->EntryCount; i++)
+                    {
+                        SiteNamesBuffer[i] = Ptr;
+                        CopyMemory(Ptr,
+                                   SiteNameArray->SiteNames[i].Buffer,
+                                   SiteNameArray->SiteNames[i].Length);
+
+                        Ptr = (PWSTR)((ULONG_PTR)Ptr + SiteNameArray->SiteNames[i].Length + sizeof(WCHAR));
+                    }
+
+                    *SiteNames = SiteNamesBuffer;
+                }
+            }
+
+            MIDL_user_free(SiteNameArray);
+        }
+    }
+    RpcExcept(EXCEPTION_EXECUTE_HANDLER)
+    {
+        status = I_RpcMapWin32Status(RpcExceptionCode());
+    }
+    RpcEndExcept;
+
+    return status;
+}
+
+
+DWORD
+WINAPI
+DsAddressToSiteNamesExA(
+    _In_opt_ LPCSTR ComputerName,
+    _In_ DWORD EntryCount,
+    _In_ PSOCKET_ADDRESS SocketAddresses,
+    _Out_ LPSTR **SiteNames,
+    _Out_ LPSTR **SubnetNames)
+{
+    FIXME("DsAddressToSiteNamesExA(%s, %lu, %p, %p, %p)\n",
+          debugstr_a(ComputerName), EntryCount, SocketAddresses,
+          SiteNames, SubnetNames);
+    return ERROR_CALL_NOT_IMPLEMENTED;
+}
+
+
+DWORD
+WINAPI
+DsAddressToSiteNamesExW(
+    _In_opt_ LPCWSTR ComputerName,
+    _In_ DWORD EntryCount,
+    _In_ PSOCKET_ADDRESS SocketAddresses,
+    _Out_ LPWSTR **SiteNames,
+    _Out_ LPWSTR **SubnetNames)
+{
+    PNL_SITE_NAME_EX_ARRAY SiteNameArray = NULL;
+    PWSTR *SiteNamesBuffer = NULL, *SubnetNamesBuffer = NULL, Ptr;
+    ULONG SiteNameBufferSize, SubnetNameBufferSize, i;
+    NET_API_STATUS status;
+
+    TRACE("DsAddressToSiteNamesExW(%s, %lu, %p, %p, %p)\n",
+          debugstr_w(ComputerName), EntryCount, SocketAddresses,
+          SiteNames, SubnetNames);
+
+    if (EntryCount == 0)
+        return ERROR_INVALID_PARAMETER;
+
+    *SiteNames = NULL;
+    *SubnetNames = NULL;
+
+    RpcTryExcept
+    {
+        status = DsrAddressToSiteNamesExW((PWSTR)ComputerName,
+                                          EntryCount,
+                                          (PNL_SOCKET_ADDRESS)SocketAddresses,
+                                          &SiteNameArray);
+        if (status == NERR_Success)
+        {
+            if (SiteNameArray->EntryCount == 0)
+            {
+                status = ERROR_INVALID_PARAMETER;
+            }
+            else
+            {
+                SiteNameBufferSize = SiteNameArray->EntryCount * sizeof(PWSTR);
+                SubnetNameBufferSize = SiteNameArray->EntryCount * sizeof(PWSTR);
+                for (i = 0; i < SiteNameArray->EntryCount; i++)
+                {
+                    SiteNameBufferSize += SiteNameArray->SiteNames[i].Length + sizeof(WCHAR);
+                    SubnetNameBufferSize += SiteNameArray->SubnetNames[i].Length + sizeof(WCHAR);
+                }
+
+                status = NetApiBufferAllocate(SiteNameBufferSize, (PVOID*)&SiteNamesBuffer);
+                if (status == NERR_Success)
+                {
+                    ZeroMemory(SiteNamesBuffer, SiteNameBufferSize);
+
+                    Ptr = (PWSTR)((ULONG_PTR)SiteNamesBuffer + SiteNameArray->EntryCount * sizeof(PWSTR));
+                    for (i = 0; i < SiteNameArray->EntryCount; i++)
+                    {
+                        SiteNamesBuffer[i] = Ptr;
+                        CopyMemory(Ptr,
+                                   SiteNameArray->SiteNames[i].Buffer,
+                                   SiteNameArray->SiteNames[i].Length);
+
+                        Ptr = (PWSTR)((ULONG_PTR)Ptr + SiteNameArray->SiteNames[i].Length + sizeof(WCHAR));
+                    }
+
+                    *SiteNames = SiteNamesBuffer;
+                }
+
+                status = NetApiBufferAllocate(SubnetNameBufferSize, (PVOID*)&SubnetNamesBuffer);
+                if (status == NERR_Success)
+                {
+                    ZeroMemory(SubnetNamesBuffer, SubnetNameBufferSize);
+
+                    Ptr = (PWSTR)((ULONG_PTR)SubnetNamesBuffer + SiteNameArray->EntryCount * sizeof(PWSTR));
+                    for (i = 0; i < SiteNameArray->EntryCount; i++)
+                    {
+                        SubnetNamesBuffer[i] = Ptr;
+                        CopyMemory(Ptr,
+                                   SiteNameArray->SubnetNames[i].Buffer,
+                                   SiteNameArray->SubnetNames[i].Length);
+
+                        Ptr = (PWSTR)((ULONG_PTR)Ptr + SiteNameArray->SubnetNames[i].Length + sizeof(WCHAR));
+                    }
+
+                    *SubnetNames = SubnetNamesBuffer;
+                }
+            }
+
+            MIDL_user_free(SiteNameArray);
+        }
+    }
+    RpcExcept(EXCEPTION_EXECUTE_HANDLER)
+    {
+        status = I_RpcMapWin32Status(RpcExceptionCode());
+    }
+    RpcEndExcept;
+
+    return status;
+
+    return ERROR_CALL_NOT_IMPLEMENTED;
+}
+
+
+DWORD
+WINAPI
+DsDeregisterDnsHostRecordsA(
+    _In_opt_ LPSTR ServerName,
+    _In_opt_ LPSTR DnsDomainName,
+    _In_opt_ GUID *DomainGuid,
+    _In_opt_ GUID *DsaGuid,
+    _In_ LPSTR DnsHostName)
+{
+    FIXME("DsDeregisterDnsHostRecordsA(%s, %s, %p, %p, %s)\n",
+          debugstr_a(ServerName), debugstr_a(DnsDomainName),
+          DomainGuid, DsaGuid, debugstr_a(DnsHostName));
+    return ERROR_CALL_NOT_IMPLEMENTED;
+}
+
+
+DWORD
+WINAPI
+DsDeregisterDnsHostRecordsW(
+    _In_opt_ LPWSTR ServerName,
+    _In_opt_ LPWSTR DnsDomainName,
+    _In_opt_ GUID *DomainGuid,
+    _In_opt_ GUID *DsaGuid,
+    _In_ LPWSTR DnsHostName)
+{
+    NET_API_STATUS status;
+
+    TRACE("DsDeregisterDnsHostRecordsW(%s, %s, %p, %p, %s)\n",
+          debugstr_w(ServerName), debugstr_w(DnsDomainName),
+          DomainGuid, DsaGuid, debugstr_w(DnsHostName));
+
+    RpcTryExcept
+    {
+        status = DsrDeregisterDnsHostRecords(ServerName,
+                                             DnsDomainName,
+                                             DomainGuid,
+                                             DsaGuid,
+                                             DnsHostName);
+    }
+    RpcExcept(EXCEPTION_EXECUTE_HANDLER)
+    {
+        status = I_RpcMapWin32Status(RpcExceptionCode());
+    }
+    RpcEndExcept;
+
+    return status;
+}
+
+
+DWORD
+WINAPI
+DsEnumerateDomainTrustsA(
+    _In_opt_ LPSTR ServerName,
+    _In_ ULONG Flags,
+    _Out_ PDS_DOMAIN_TRUSTSA *Domains,
+    _Out_ PULONG DomainCount)
+{
+    FIXME("DsEnumerateDomainTrustsA(%s, %x, %p, %p)\n",
+          debugstr_a(ServerName), Flags, Domains, DomainCount);
+    return ERROR_CALL_NOT_IMPLEMENTED;
+}
+
+
+DWORD
+WINAPI
+DsEnumerateDomainTrustsW(
+    _In_opt_ LPWSTR ServerName,
+    _In_ ULONG Flags,
+    _Out_ PDS_DOMAIN_TRUSTSW *Domains,
+    _Out_ PULONG DomainCount)
+{
+    FIXME("DsEnumerateDomainTrustsW(%s, %x, %p, %p)\n",
+          debugstr_w(ServerName), Flags, Domains, DomainCount);
+    return ERROR_CALL_NOT_IMPLEMENTED;
+}
+
+
+DWORD
+WINAPI
+DsGetDcNameA(
+    _In_ LPCSTR ComputerName,
+    _In_ LPCSTR DomainName,
+    _In_ GUID *DomainGuid,
+    _In_ LPCSTR SiteName,
+    _In_ ULONG Flags,
+    _Out_ PDOMAIN_CONTROLLER_INFOA *DomainControllerInfo)
+{
+    FIXME("DsGetDcNameA(%s, %s, %s, %s, %08x, %p): stub\n",
+          debugstr_a(ComputerName), debugstr_a(DomainName), debugstr_guid(DomainGuid),
+          debugstr_a(SiteName), Flags, DomainControllerInfo);
+    return ERROR_CALL_NOT_IMPLEMENTED;
+}
+
+
+DWORD
+WINAPI
+DsGetDcNameW(
+    _In_ LPCWSTR ComputerName,
+    _In_ LPCWSTR DomainName,
+    _In_ GUID *DomainGuid,
+    _In_ LPCWSTR SiteName,
+    _In_ ULONG Flags,
+    _Out_ PDOMAIN_CONTROLLER_INFOW *DomainControllerInfo)
+{
+    FIXME("DsGetDcNameW(%s, %s, %s, %s, %08x, %p)\n",
+          debugstr_w(ComputerName), debugstr_w(DomainName), debugstr_guid(DomainGuid),
+          debugstr_w(SiteName), Flags, DomainControllerInfo);
+    return ERROR_CALL_NOT_IMPLEMENTED;
+}
+
+
+DWORD
+WINAPI
+DsGetDcSiteCoverageA(
+    _In_opt_ LPCSTR ServerName,
+    _Out_ PULONG EntryCount,
+    _Out_ LPSTR **SiteNames)
+{
+    FIXME("DsGetDcSiteCoverageA(%s, %p, %p)\n",
+          debugstr_a(ServerName), EntryCount, SiteNames);
+    return ERROR_CALL_NOT_IMPLEMENTED;
+}
+
+
+DWORD
+WINAPI
+DsGetDcSiteCoverageW(
+    _In_opt_ LPCWSTR ServerName,
+    _Out_ PULONG EntryCount,
+    _Out_ LPWSTR **SiteNames)
+{
+    PNL_SITE_NAME_ARRAY SiteNameArray = NULL;
+    PWSTR *SiteNamesBuffer = NULL, Ptr;
+    ULONG BufferSize, i;
+    NET_API_STATUS status;
+
+    TRACE("DsGetDcSiteCoverageW(%s, %p, %p)\n",
+          debugstr_w(ServerName), EntryCount, SiteNames);
+
+    *EntryCount = 0;
+    *SiteNames = NULL;
+
+    RpcTryExcept
+    {
+        status = DsrGetDcSiteCoverageW((PWSTR)ServerName,
+                                       &SiteNameArray);
+        if (status == NERR_Success)
+        {
+            if (SiteNameArray->EntryCount == 0)
+            {
+                status = ERROR_INVALID_PARAMETER;
+            }
+            else
+            {
+                BufferSize = SiteNameArray->EntryCount * sizeof(PWSTR);
+                for (i = 0; i < SiteNameArray->EntryCount; i++)
+                    BufferSize += SiteNameArray->SiteNames[i].Length + sizeof(WCHAR);
+
+                status = NetApiBufferAllocate(BufferSize, (PVOID*)&SiteNamesBuffer);
+                if (status == NERR_Success)
+                {
+                    ZeroMemory(SiteNamesBuffer, BufferSize);
+
+                    Ptr = (PWSTR)((ULONG_PTR)SiteNamesBuffer + SiteNameArray->EntryCount * sizeof(PWSTR));
+                    for (i = 0; i < SiteNameArray->EntryCount; i++)
+                    {
+                        SiteNamesBuffer[i] = Ptr;
+                        CopyMemory(Ptr,
+                                   SiteNameArray->SiteNames[i].Buffer,
+                                   SiteNameArray->SiteNames[i].Length);
+
+                        Ptr = (PWSTR)((ULONG_PTR)Ptr + SiteNameArray->SiteNames[i].Length + sizeof(WCHAR));
+                    }
+
+                    *EntryCount = SiteNameArray->EntryCount;
+                    *SiteNames = SiteNamesBuffer;
+                }
+            }
+
+            MIDL_user_free(SiteNameArray);
+        }
+    }
+    RpcExcept(EXCEPTION_EXECUTE_HANDLER)
+    {
+        status = I_RpcMapWin32Status(RpcExceptionCode());
+    }
+    RpcEndExcept;
+
+    return status;
+}
+
+
+DWORD
+WINAPI
+DsGetForestTrustInformationW(
+    _In_opt_ LPCWSTR ServerName,
+    _In_opt_ LPCWSTR TrustedDomainName,
+    _In_ DWORD Flags,
+    _Out_ PLSA_FOREST_TRUST_INFORMATION *ForestTrustInfo)
+{
+    NET_API_STATUS status;
+
+    TRACE("DsGetForestTrustInformationW(%s, %s, 0x%08lx, %p)\n",
+          debugstr_w(ServerName), debugstr_w(TrustedDomainName),
+          Flags, ForestTrustInfo);
+
+    RpcTryExcept
+    {
+        status = DsrGetForestTrustInformation((PWSTR)ServerName,
+                                              (PWSTR)TrustedDomainName,
+                                              Flags,
+                                              ForestTrustInfo);
+    }
+    RpcExcept(EXCEPTION_EXECUTE_HANDLER)
+    {
+        status = I_RpcMapWin32Status(RpcExceptionCode());
+    }
+    RpcEndExcept;
+
+    return status;
+}
+
+
+DWORD
+WINAPI
+DsGetSiteNameA(
+    _In_ LPCSTR ComputerName,
+    _Out_ LPSTR *SiteName)
+{
+    FIXME("DsGetSiteNameA(%s, %p)\n",
+          debugstr_a(ComputerName), SiteName);
+    return ERROR_CALL_NOT_IMPLEMENTED;
+}
+
+
+DWORD
+WINAPI
+DsGetSiteNameW(
+    _In_ LPCWSTR ComputerName,
+    _Out_ LPWSTR *SiteName)
+{
+    NET_API_STATUS status;
+
+    TRACE("DsGetSiteNameW(%s, %p)\n",
+          debugstr_w(ComputerName), SiteName);
+
+    RpcTryExcept
+    {
+        status = DsrGetSiteName((PWSTR)ComputerName,
+                                SiteName);
+    }
+    RpcExcept(EXCEPTION_EXECUTE_HANDLER)
+    {
+        status = I_RpcMapWin32Status(RpcExceptionCode());
+    }
+    RpcEndExcept;
+
+    return status;
+}
+
+
+DWORD
+WINAPI
+DsMergeForestTrustInformationW(
+    _In_ LPCWSTR DomainName,
+    _In_ PLSA_FOREST_TRUST_INFORMATION NewForestTrustInfo,
+    _In_opt_ PLSA_FOREST_TRUST_INFORMATION OldForestTrustInfo,
+    _Out_ PLSA_FOREST_TRUST_INFORMATION *ForestTrustInfo)
+{
+    FIXME("DsMergeForestTrustInformationW(%s, %p, %p, %p)\n",
+          debugstr_w(DomainName), NewForestTrustInfo,
+          OldForestTrustInfo, ForestTrustInfo);
+    return ERROR_CALL_NOT_IMPLEMENTED;
+}
+
+
+DWORD
+WINAPI
+DsValidateSubnetNameA(
+    _In_ LPCSTR SubnetName)
+{
+    FIXME("DsValidateSubnetNameA(%s)\n",
+          debugstr_a(SubnetName));
+    return ERROR_CALL_NOT_IMPLEMENTED;
+}
+
+
+DWORD
+WINAPI
+DsValidateSubnetNameW(
+    _In_ LPCWSTR SubnetName)
+{
+    FIXME("DsValidateSubnetNameW(%s)\n",
+          debugstr_w(SubnetName));
+    return ERROR_CALL_NOT_IMPLEMENTED;
+}
+
+
 NTSTATUS
 WINAPI
 NetEnumerateTrustedDomains(
     _In_ LPWSTR ServerName,
     _Out_ LPWSTR *DomainNames)
 {
-    FIXME("NetEnumerateTrustedDomains(%s, %p)\n",
+    DOMAIN_NAME_BUFFER DomainNameBuffer = {0, NULL};
+    NTSTATUS Status = 0;
+
+    TRACE("NetEnumerateTrustedDomains(%s, %p)\n",
           debugstr_w(ServerName), DomainNames);
 
-    return STATUS_NOT_IMPLEMENTED;
+    RpcTryExcept
+    {
+        Status = NetrEnumerateTrustedDomains(ServerName,
+                                             &DomainNameBuffer);
+        if (NT_SUCCESS(Status))
+        {
+            *DomainNames = (LPWSTR)DomainNameBuffer.DomainNames;
+        }
+    }
+    RpcExcept(EXCEPTION_EXECUTE_HANDLER)
+    {
+        Status = I_RpcMapWin32Status(RpcExceptionCode());
+    } RpcEndExcept;
+
+    return Status;
 }
 
 

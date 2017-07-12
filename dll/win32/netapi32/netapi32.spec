@@ -1,10 +1,10 @@
 @ stub CredpValidateTargetName
-@ stub DsAddressToSiteNamesA
-@ stub DsAddressToSiteNamesExA
-@ stub DsAddressToSiteNamesExW
-@ stub DsAddressToSiteNamesW
-@ stub DsDeregisterDnsHostRecordsA
-@ stub DsDeregisterDnsHostRecordsW
+@ stdcall DsAddressToSiteNamesA(str long ptr str)
+@ stdcall DsAddressToSiteNamesExA(str long ptr str str)
+@ stdcall DsAddressToSiteNamesExW(wstr long ptr wstr wstr)
+@ stdcall DsAddressToSiteNamesW(wstr long ptr wstr)
+@ stdcall DsDeregisterDnsHostRecordsA(str str ptr ptr str)
+@ stdcall DsDeregisterDnsHostRecordsW(wstr wstr ptr ptr wstr)
 8 stdcall DsEnumerateDomainTrustsA(wstr long ptr ptr)
 9 stdcall DsEnumerateDomainTrustsW(wstr long ptr ptr)
 @ stub DsGetDcCloseW
@@ -16,12 +16,12 @@
 @ stub DsGetDcNextW
 @ stub DsGetDcOpenA
 @ stub DsGetDcOpenW
-@ stub DsGetDcSiteCoverageA
-@ stub DsGetDcSiteCoverageW
-@ stub DsGetForestTrustInformationW
-@ stub DsGetSiteNameA
+@ stdcall DsGetDcSiteCoverageA(str ptr str)
+@ stdcall DsGetDcSiteCoverageW(wstr ptr wstr)
+@ stdcall DsGetForestTrustInformationW(wstr wstr long ptr)
+@ stdcall DsGetSiteNameA(str str)
 @ stdcall DsGetSiteNameW(wstr wstr)
-@ stub DsMergeForestTrustInformationW
+@ stdcall DsMergeForestTrustInformationW(wstr ptr ptr ptr)
 @ stub DsRoleAbortDownlevelServerUpgrade
 @ stub DsRoleCancel
 @ stub DsRoleDcAsDc
@@ -36,8 +36,8 @@
 @ stub DsRoleIfmHandleFree
 @ stub DsRoleServerSaveStateForUpgrade
 @ stub DsRoleUpgradeDownlevelServer
-@ stub DsValidateSubnetNameA
-@ stub DsValidateSubnetNameW
+@ stdcall DsValidateSubnetNameA(str)
+@ stdcall DsValidateSubnetNameW(wstr)
 @ stub I_BrowserDebugCall
 @ stdcall I_BrowserDebugTrace(wstr str)
 @ stdcall I_BrowserQueryEmulatedDomains(wstr ptr ptr)

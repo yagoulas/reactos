@@ -270,8 +270,6 @@ HRESULT WINAPI CDesktopFolder::FinalConstruct()
 
     /* Create the inner fs folder */
     hr = SHELL32_CoCreateInitSF(pidlRoot, 
-                                NULL,
-                                NULL,
                                 &CLSID_ShellFSFolder,
                                 CSIDL_DESKTOPDIRECTORY,
                                 IID_PPV_ARG(IShellFolder2, &m_DesktopFSFolder));
@@ -280,8 +278,6 @@ HRESULT WINAPI CDesktopFolder::FinalConstruct()
 
     /* Create the inner shared fs folder. Dont fail on failure. */
     hr = SHELL32_CoCreateInitSF(pidlRoot, 
-                                NULL,
-                                NULL,
                                 &CLSID_ShellFSFolder,
                                 CSIDL_COMMON_DESKTOPDIRECTORY,
                                 IID_PPV_ARG(IShellFolder2, &m_SharedDesktopFSFolder));
@@ -514,7 +510,6 @@ HRESULT WINAPI CDesktopFolder::CreateViewObject(
     REFIID riid,
     LPVOID *ppvOut)
 {
-    CComPtr<IShellView> pShellView;
     HRESULT hr = E_INVALIDARG;
 
     TRACE ("(%p)->(hwnd=%p,%s,%p)\n",
@@ -549,9 +544,8 @@ HRESULT WINAPI CDesktopFolder::CreateViewObject(
     }
     else if (IsEqualIID (riid, IID_IShellView))
     {
-        hr = IShellView_Constructor((IShellFolder *)this, &pShellView);
-        if (pShellView)
-            hr = pShellView->QueryInterface(riid, ppvOut);
+        SFV_CREATE sfvparams = {sizeof(SFV_CREATE), this};
+        hr = SHCreateShellFolderView(&sfvparams, (IShellView**)ppvOut);
     }
     TRACE ("-- (%p)->(interface=%p)\n", this, ppvOut);
     return hr;

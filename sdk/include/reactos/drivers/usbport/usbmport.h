@@ -21,6 +21,21 @@
 #define USBPORT_ENDPOINT_HALT    1
 #define USBPORT_ENDPOINT_CONTROL 4
 
+/* Interrupt Endpoint Poll Interval */
+#define ENDPOINT_INTERRUPT_1ms   1
+#define ENDPOINT_INTERRUPT_2ms   2
+#define ENDPOINT_INTERRUPT_4ms   4
+#define ENDPOINT_INTERRUPT_8ms   8
+#define ENDPOINT_INTERRUPT_16ms  16
+#define ENDPOINT_INTERRUPT_32ms  32
+
+#define INTERRUPT_ENDPOINTs (ENDPOINT_INTERRUPT_32ms + \
+                             ENDPOINT_INTERRUPT_16ms + \
+                             ENDPOINT_INTERRUPT_8ms  + \
+                             ENDPOINT_INTERRUPT_4ms  + \
+                             ENDPOINT_INTERRUPT_2ms  + \
+                             ENDPOINT_INTERRUPT_1ms)
+
 /* Types of resources. For USBPORT_RESOURCES::ResourcesTypes */
 #define USBPORT_RESOURCES_PORT      1
 #define USBPORT_RESOURCES_INTERRUPT 2
@@ -66,19 +81,7 @@ typedef ULONG RHSTATUS; // Roothub status
 #define RH_STATUS_NO_CHANGES    1
 #define RH_STATUS_UNSUCCESSFUL  2
 
-typedef USB_20_PORT_CHANGE USB_PORT_STATUS_CHANGE;
-
-typedef union _USBHUB_PORT_STATUS {
-struct {
-    USB_PORT_STATUS UsbPortStatus;
-    USB_PORT_STATUS_CHANGE UsbPortStatusChange;
-  };
-  ULONG AsULONG;
-} USBHUB_PORT_STATUS, *PUSBHUB_PORT_STATUS;
-
 /* Additional USB Class Codes from USB.org */
-#define USBC_DEVICE_CLASS_AUDIO_VIDEO           0x10
-#define USBC_DEVICE_CLASS_BILLBOARD             0x11
 #define USBC_DEVICE_CLASS_TYPE_C_BRIDGE         0x12
 
 /* Miniport functions */
@@ -222,7 +225,7 @@ typedef MPSTATUS
 (NTAPI *PHCI_RH_GET_PORT_STATUS)(
   PVOID,
   USHORT,
-  PUSBHUB_PORT_STATUS);
+  PUSB_PORT_STATUS_AND_CHANGE);
 
 typedef MPSTATUS
 (NTAPI *PHCI_RH_GET_HUB_STATUS)(
@@ -417,6 +420,10 @@ typedef NTSTATUS
   PVOID,
   ULONG);
 
+#define USBPORT_INVALIDATE_CONTROLLER_RESET            1
+#define USBPORT_INVALIDATE_CONTROLLER_SURPRISE_REMOVE  2
+#define USBPORT_INVALIDATE_CONTROLLER_SOFT_INTERRUPT   3
+
 typedef ULONG
 (NTAPI *PUSBPORT_INVALIDATE_CONTROLLER)(
   PVOID,
@@ -453,6 +460,7 @@ typedef VOID
 #define USB_MINIPORT_VERSION_OHCI 0x01
 #define USB_MINIPORT_VERSION_UHCI 0x02
 #define USB_MINIPORT_VERSION_EHCI 0x03
+#define USB_MINIPORT_VERSION_XHCI 0x04
 
 #define USB_MINIPORT_FLAGS_INTERRUPT    0x0001
 #define USB_MINIPORT_FLAGS_PORT_IO      0x0002
@@ -463,6 +471,9 @@ typedef VOID
 #define USB_MINIPORT_FLAGS_POLLING      0x0080
 #define USB_MINIPORT_FLAGS_NO_DMA       0x0100
 #define USB_MINIPORT_FLAGS_WAKE_SUPPORT 0x0200
+
+#define TOTAL_USB11_BUS_BANDWIDTH  12000
+#define TOTAL_USB20_BUS_BANDWIDTH  400000
 
 typedef struct _USBPORT_REGISTRATION_PACKET {
   ULONG MiniPortVersion;
@@ -556,6 +567,9 @@ typedef struct _USBPORT_REGISTRATION_PACKET {
   ULONG Reserved5;
 } USBPORT_REGISTRATION_PACKET, *PUSBPORT_REGISTRATION_PACKET;
 
+#define USB10_MINIPORT_INTERFACE_VERSION  100
+#define USB20_MINIPORT_INTERFACE_VERSION  200
+
 typedef struct _USBPORT_MINIPORT_INTERFACE {
   PDRIVER_OBJECT DriverObject;
   LIST_ENTRY DriverLink;
@@ -625,9 +639,53 @@ typedef struct _USBPORT_TRANSFER_PARAMETERS {
 
 C_ASSERT(sizeof(USBPORT_TRANSFER_PARAMETERS) == 28);
 
+/* For USB1.1 or USB3 Hub Descriptors */
+typedef union _USBPORT_HUB_11_CHARACTERISTICS {
+  struct {
+    USHORT PowerControlMode :1;
+    USHORT NoPowerSwitching :1; // Reserved. Used only on 1.0 compliant hubs that implement no power switching.
+    USHORT PartOfCompoundDevice :1;
+    USHORT OverCurrentProtectionMode :1;
+    USHORT NoOverCurrentProtection :1;
+    USHORT Reserved1 :11;
+  };
+  USHORT AsUSHORT;
+} USBPORT_HUB_11_CHARACTERISTICS;
+
+C_ASSERT(sizeof(USBPORT_HUB_11_CHARACTERISTICS) == sizeof(USHORT));
+
+/* For USB2.0 Hub Descriptors */
+typedef union _USBPORT_HUB_20_CHARACTERISTICS {
+  struct {
+    USHORT PowerControlMode :1;
+    USHORT NoPowerSwitching :1; // Reserved. Used only on 1.0 compliant hubs that implement no power switching.
+    USHORT PartOfCompoundDevice :1;
+    USHORT OverCurrentProtectionMode :1;
+    USHORT NoOverCurrentProtection :1;
+    USHORT TtThinkTime :2;
+    USHORT PortIndicatorsSupported :1;
+    USHORT Reserved1 :8;
+  };
+  USHORT AsUSHORT;
+} USBPORT_HUB_20_CHARACTERISTICS;
+
+C_ASSERT(sizeof(USBPORT_HUB_20_CHARACTERISTICS) == sizeof(USHORT));
+
+typedef USBPORT_HUB_11_CHARACTERISTICS USBPORT_HUB_30_CHARACTERISTICS;
+
+typedef union _USBPORT_HUB_CHARACTERISTICS {
+  USHORT AsUSHORT;
+  USBPORT_HUB_11_CHARACTERISTICS Usb11HubCharacteristics;
+  USBPORT_HUB_20_CHARACTERISTICS Usb20HubCharacteristics;
+  USBPORT_HUB_30_CHARACTERISTICS Usb30HubCharacteristics;
+} USBPORT_HUB_CHARACTERISTICS;
+
+C_ASSERT(sizeof(USBPORT_HUB_CHARACTERISTICS) == sizeof(USHORT));
+
 typedef struct _USBPORT_ROOT_HUB_DATA {
   ULONG NumberOfPorts;
-  ULONG HubCharacteristics;
+  USBPORT_HUB_CHARACTERISTICS HubCharacteristics;
+  USHORT Padded1;
   ULONG PowerOnToPowerGood;
   ULONG HubControlCurrent;
 } USBPORT_ROOT_HUB_DATA, *PUSBPORT_ROOT_HUB_DATA;
