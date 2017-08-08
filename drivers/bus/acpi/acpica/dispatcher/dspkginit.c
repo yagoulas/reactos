@@ -100,8 +100,8 @@ AcpiDsBuildInternalPackageObj (
     ACPI_PARSE_OBJECT       *Parent;
     ACPI_OPERAND_OBJECT     *ObjDesc = NULL;
     ACPI_STATUS             Status = AE_OK;
-    UINT16                  Index;
     UINT16                  ReferenceCount;
+    UINT32                  Index;
     UINT32                  i;
 
 
@@ -132,21 +132,13 @@ AcpiDsBuildInternalPackageObj (
             return_ACPI_STATUS (AE_NO_MEMORY);
         }
 
-printf ("****DS: BuildPkg - Create package object %p\n", ObjDesc);
-
         ObjDesc->Package.Node = Parent->Common.Node;
     }
 
-//
-printf ("****DS: BuildPkg, from DsEvalDataObjectOperands - Valid: %X, Pass %u, %p\n",
-    ObjDesc->Package.Flags & AOPOBJ_DATA_VALID,
-    WalkState->PassNumber, ObjDesc);
-
-// just in case
-if (ObjDesc->Package.Flags & AOPOBJ_DATA_VALID)
-{
-    return_ACPI_STATUS (AE_OK);
-}
+    if (ObjDesc->Package.Flags & AOPOBJ_DATA_VALID) /* Just in case */
+    {
+        return_ACPI_STATUS (AE_OK);
+    }
 
     /*
      * Allocate the element array (array of pointers to the individual
@@ -163,6 +155,13 @@ if (ObjDesc->Package.Flags & AOPOBJ_DATA_VALID)
     }
 
     ObjDesc->Package.Count = ElementCount;
+    Arg = Op->Common.Value.Arg;
+    Arg = Arg->Common.Next;
+
+    if (Arg)
+    {
+        ObjDesc->Package.Flags |= AOPOBJ_DATA_VALID;
+    }
 
     /*
      * Initialize the elements of the package, up to the NumElements count.
@@ -170,31 +169,12 @@ if (ObjDesc->Package.Flags & AOPOBJ_DATA_VALID)
      * if NumElements is greater than the package list length. Likewise,
      * Package is truncated if NumElements is less than the list length.
      */
-    Arg = Op->Common.Value.Arg;
-    Arg = Arg->Common.Next;
-
-    if (Arg)
-    {
-        printf ("****DS: Mark package evaluated\n");
-        ObjDesc->Package.Flags |= AOPOBJ_DATA_VALID;
-    }
-
     for (i = 0; Arg && (i < ElementCount); i++)
     {
-printf ("****DS: Eval package element\n");
-
         if (Arg->Common.AmlOpcode == AML_INT_RETURN_VALUE_OP)
         {
-// Maybe this is just temp code:
-/*
-if (!Arg->Common.Node)
-{
-    printf ("****DS: No attached NS node\n");
-    return_ACPI_STATUS (AE_AML_INTERNAL);
-}
-else  */         if (Arg->Common.Node->Type == ACPI_TYPE_METHOD)
+            if (Arg->Common.Node->Type == ACPI_TYPE_METHOD)
             {
-
                 /*
                  * A method reference "looks" to the parser to be a method
                  * invocation, so we special case it here
@@ -217,7 +197,6 @@ else  */         if (Arg->Common.Node->Type == ACPI_TYPE_METHOD)
                 WalkState, Arg, &ObjDesc->Package.Elements[i]);
             if (Status == AE_NOT_FOUND)
             {
-// remove or fix
                 ACPI_ERROR ((AE_INFO, "%-48s", "****DS namepath not found"));
             }
 
@@ -237,8 +216,9 @@ else  */         if (Arg->Common.Node->Type == ACPI_TYPE_METHOD)
             if (ReferenceCount > 1)
             {
                 /* Make new element ref count match original ref count */
+                /* TBD: Probably need an AcpiUtAddReferences function */
 
-                for (Index = 0; Index < (ReferenceCount - 1); Index++)
+                for (Index = 0; Index < ((UINT32) ReferenceCount - 1); Index++)
                 {
                     AcpiUtAddReference ((ObjDesc->Package.Elements[i]));
                 }
@@ -252,19 +232,17 @@ else  */         if (Arg->Common.Node->Type == ACPI_TYPE_METHOD)
 
     if (Arg)
     {
-        //ObjDesc->Package.Flags |= AOPOBJ_DATA_VALID;
-
-
         /*
-         * NumElements was exhausted, but there are remaining elements in the
-         * PackageList. Truncate the package to NumElements.
+         * NumElements was exhausted, but there are remaining elements in
+         * the PackageList. Truncate the package to NumElements.
          *
-         * Note: technically, this is an error, from ACPI spec: "It is an error
-         * for NumElements to be less than the number of elements in the
-         * PackageList". However, we just print a message and
-         * no exception is returned. This provides Windows compatibility. Some
-         * BIOSs will alter the NumElements on the fly, creating this type
-         * of ill-formed package object.
+         * Note: technically, this is an error, from ACPI spec: "It is an
+         * error for NumElements to be less than the number of elements in
+         * the PackageList". However, we just print a message and no
+         * exception is returned. This provides compatibility with other
+         * ACPI implementations. Some firmware implementations will alter
+         * the NumElements on the fly, possibly creating this type of
+         * ill-formed package object.
          */
         while (Arg)
         {
@@ -305,6 +283,7 @@ else  */         if (Arg->Common.Node->Type == ACPI_TYPE_METHOD)
             i, ElementCount));
     }
 
+    ObjDesc->Package.Flags |= AOPOBJ_DATA_VALID;
     Op->Common.Node = ACPI_CAST_PTR (ACPI_NAMESPACE_NODE, ObjDesc);
     return_ACPI_STATUS (Status);
 }
@@ -360,7 +339,7 @@ AcpiDsInitPackageElement (
 
     if (SourceObject->Common.Type == ACPI_TYPE_LOCAL_REFERENCE)
     {
-        /* Resolve the (named) reference to a namespace node */
+        /* Attempt to resolve the (named) reference to a namespace node */
 
         AcpiDsResolvePackageElement (ElementPtr);
     }
@@ -379,7 +358,7 @@ AcpiDsInitPackageElement (
  *
  * PARAMETERS:  ElementPtr          - Pointer to a reference object
  *
- * RETURN:      Status
+ * RETURN:      Possible new element is stored to the indirect ElementPtr
  *
  * DESCRIPTION: Resolve a package element that is a reference to a named
  *              object.
@@ -394,6 +373,7 @@ AcpiDsResolvePackageElement (
     ACPI_GENERIC_STATE      ScopeInfo;
     ACPI_OPERAND_OBJECT     *Element = *ElementPtr;
     ACPI_NAMESPACE_NODE     *ResolvedNode;
+    char                    *ExternalPath = NULL;
     ACPI_OBJECT_TYPE        Type;
 
 
@@ -413,28 +393,33 @@ AcpiDsResolvePackageElement (
 
     Status = AcpiNsLookup (&ScopeInfo,
         (char *) Element->Reference.Aml,            /* Pointer to AML path */
-        ACPI_TYPE_ANY, ACPI_IMODE_LOAD_PASS2,
+        ACPI_TYPE_ANY, ACPI_IMODE_EXECUTE,
         ACPI_NS_SEARCH_PARENT | ACPI_NS_DONT_OPEN_SCOPE,
         NULL, &ResolvedNode);
-
     if (ACPI_FAILURE (Status))
     {
+        Status = AcpiNsExternalizeName (ACPI_UINT32_MAX,
+            (char *) Element->Reference.Aml,
+            NULL, &ExternalPath);
+
         ACPI_EXCEPTION ((AE_INFO, Status,
-            "Could not resolve package element"));
+            "Could not find/resolve named package element: %s", ExternalPath));
+
+        ACPI_FREE (ExternalPath);
+        *ElementPtr = NULL;
         return_VOID;
     }
-
     else if (ResolvedNode->Type == ACPI_TYPE_ANY)
     {
         /* Named reference not resolved, return a NULL package element */
 
         ACPI_ERROR ((AE_INFO,
-            "Could not resolve package element [%4.4s] in [%4.4s]",
+            "Could not resolve named package element [%4.4s] in [%4.4s]",
             ResolvedNode->Name.Ascii, ScopeInfo.Scope.Node->Name.Ascii));
         *ElementPtr = NULL;
         return_VOID;
     }
-
+#if 0
     else if (ResolvedNode->Flags & ANOBJ_TEMPORARY)
     {
         /*
@@ -445,11 +430,22 @@ AcpiDsResolvePackageElement (
          * from under the method. (05/2017).
          */
         ACPI_ERROR ((AE_INFO,
-            "Package element is a temporary name [%4.4s], "
-            "returning NULL element",
+            "Package element refers to a temporary name [%4.4s], "
+            "inserting a NULL element",
             ResolvedNode->Name.Ascii));
         *ElementPtr = NULL;
         return_VOID;
+    }
+#endif
+
+    /*
+     * Special handling for Alias objects. We need ResolvedNode to point
+     * to the Alias target. This effectively "resolves" the alias.
+     */
+    if (ResolvedNode->Type == ACPI_TYPE_LOCAL_ALIAS)
+    {
+        ResolvedNode = ACPI_CAST_PTR (ACPI_NAMESPACE_NODE,
+            ResolvedNode->Object);
     }
 
     /* Update the reference object */
@@ -479,6 +475,7 @@ AcpiDsResolvePackageElement (
     }
 
 #if 0
+/* TBD - alias support */
     /*
      * Special handling for Alias objects. We need to setup the type
      * and the Op->Common.Node to point to the Alias target. Note,

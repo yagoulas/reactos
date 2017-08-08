@@ -108,6 +108,8 @@ HRESULT WINAPI ThemeDrawCaptionText(PDRAW_CONTEXT pcontext, RECT* pRect, int iPa
     LOGFONTW logfont;
     COLORREF textColor;
     COLORREF oldTextColor;
+    int align = CA_LEFT;
+    int drawStyles = DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS;
 
     WCHAR buffer[50];
     WCHAR *pszText = buffer;
@@ -140,6 +142,12 @@ HRESULT WINAPI ThemeDrawCaptionText(PDRAW_CONTEXT pcontext, RECT* pRect, int iPa
     else
         textColor = GetSysColor(COLOR_CAPTIONTEXT);
 
+    GetThemeEnumValue(pcontext->theme, iPartId, iStateId, TMT_CONTENTALIGNMENT, &align);
+    if (align == CA_CENTER)
+        drawStyles |= DT_CENTER;
+    else if (align == CA_RIGHT)
+        drawStyles |= DT_RIGHT;
+
     oldTextColor = SetTextColor(pcontext->hDC, textColor);
     DrawThemeText(pcontext->theme, 
                   pcontext->hDC, 
@@ -147,7 +155,7 @@ HRESULT WINAPI ThemeDrawCaptionText(PDRAW_CONTEXT pcontext, RECT* pRect, int iPa
                   iStateId, 
                   pszText, 
                   len - 1, 
-                  DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, 
+                  drawStyles, 
                   0, 
                   pRect);
     SetTextColor(pcontext->hDC, oldTextColor);
@@ -297,6 +305,7 @@ void ThemeCalculateCaptionButtonsPos(HWND hWnd, HTHEME htheme)
 
 static void 
 ThemeDrawCaptionButton(PDRAW_CONTEXT pcontext, 
+                       RECT* prcCurrent,
                        CAPTIONBUTTON buttonId, 
                        INT iStateId)
 {
@@ -340,6 +349,9 @@ ThemeDrawCaptionButton(PDRAW_CONTEXT pcontext,
         return;
     }
 
+    if (prcCurrent)
+        prcCurrent->right = pwndData->rcCaptionButtons[buttonId].left;
+
     DrawThemeBackground(pcontext->theme, pcontext->hDC, iPartId, iStateId, &pwndData->rcCaptionButtons[buttonId], NULL);
 }
 
@@ -361,13 +373,13 @@ static void
 ThemeDrawCaptionButtons(PDRAW_CONTEXT pcontext, DWORD htHot, DWORD htDown)
 {
     /* Draw the buttons */
-    ThemeDrawCaptionButton(pcontext, CLOSEBUTTON, 
+    ThemeDrawCaptionButton(pcontext, NULL, CLOSEBUTTON, 
                            ThemeGetButtonState(HTCLOSE, htHot, htDown, pcontext->Active));
-    ThemeDrawCaptionButton(pcontext, MAXBUTTON,  
+    ThemeDrawCaptionButton(pcontext, NULL, MAXBUTTON,  
                            ThemeGetButtonState(HTMAXBUTTON, htHot, htDown, pcontext->Active));
-    ThemeDrawCaptionButton(pcontext, MINBUTTON,
+    ThemeDrawCaptionButton(pcontext, NULL, MINBUTTON,
                            ThemeGetButtonState(HTMINBUTTON, htHot, htDown, pcontext->Active));
-    ThemeDrawCaptionButton(pcontext, HELPBUTTON,
+    ThemeDrawCaptionButton(pcontext, NULL, HELPBUTTON,
                            ThemeGetButtonState(HTHELP, htHot, htDown, pcontext->Active));
 }
 
@@ -413,10 +425,10 @@ ThemeDrawCaption(PDRAW_CONTEXT pcontext, RECT* prcCurrent)
     {
         iState = pcontext->Active ? BUTTON_NORMAL : BUTTON_INACTIVE;
 
-        ThemeDrawCaptionButton(pcontext, CLOSEBUTTON, iState);
-        ThemeDrawCaptionButton(pcontext, MAXBUTTON, iState);
-        ThemeDrawCaptionButton(pcontext, MINBUTTON, iState);
-        ThemeDrawCaptionButton(pcontext, HELPBUTTON, iState);
+        ThemeDrawCaptionButton(pcontext, &rcPart, CLOSEBUTTON, iState);
+        ThemeDrawCaptionButton(pcontext, &rcPart, MAXBUTTON, iState);
+        ThemeDrawCaptionButton(pcontext, &rcPart, MINBUTTON, iState);
+        ThemeDrawCaptionButton(pcontext, &rcPart, HELPBUTTON, iState);
     }
     
     rcPart.top += 3 ;
