@@ -4,6 +4,10 @@
         <OS_PLATFORM >1</OS_PLATFORM>
         <DATABASE_ID>{11111111-1111-1111-1111-111111111111}</DATABASE_ID>
         <LIBRARY>
+            <INCLUDE MODULE="kernel32.dll" />
+            <INCLUDE MODULE="msvcrt.dll" />
+            <INCLUDE MODULE="ole32.dll" />
+            <INCLUDE MODULE="oleaut32.dll" />
 
             <!-- Version lie shims -->
 
@@ -166,6 +170,9 @@
             <SHIM NAME="DisableThemes">
                 <DLLFILE>acgenral.dll</DLLFILE>
             </SHIM>
+            <SHIM NAME="VMHorizonSetup">
+                <DLLFILE>aclayers.dll</DLLFILE>
+            </SHIM>
 
             <SHIM NAME="HideShimEnv">
                 <DLLFILE>aclayers.dll</DLLFILE>
@@ -275,6 +282,10 @@
 
         <LAYER NAME="DisableThemes">
             <SHIM_REF NAME="DisableThemes" />
+        </LAYER>
+        <LAYER NAME="VMHorizonSetup">
+            <!-- ProductId: {7051C96D-AA61-4D83-AF37-646E82D616ED} -->
+            <SHIM_REF NAME="VMHorizonSetup" />
         </LAYER>
 
     </DATABASE>
