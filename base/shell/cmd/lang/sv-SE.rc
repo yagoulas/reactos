@@ -47,10 +47,6 @@ CD[..|.]\n\n\
   /D   Vill ändra aktuell enhet och aktuell mapp.\n\n\
 Skriv CD enhet: för att visa aktuell mapp på specificerad enhet.\n\
 Skriv CD uten parametere för att visa aktuell enhet och mapp.\n"
-    STRING_CHCP_HELP "Visar eller väljer aktiv teckentabell.\n\n\
-CHCP [nnn]\n\n\
-  nnn   Anger nummer på teckentabell.\n\n\
-Skriv CHCP utan parametrar för att visa aktiv teckentabellnummer.\n"
     STRING_CHOICE_HELP "Väntar på att användaren skall ange ett av alternativen.\n\n\
 CHOICE  [/C[:]val][/N][/S][/T[:]c,nn][text]\n\n\
   /C[:]Val      Anger lista med alternativ. Standard är JN.\n\
@@ -75,9 +71,9 @@ CMD [/[C|K] kommando][/P][/Q][/T:bf]\n\n\
               (kan inte avsluttes).\n\
   /T:bf       Ställer in bakgrunn/forgrunn färg (se COLOR kommando).\n"
     STRING_COLOR_HELP1 "Ställer in standard forgrunns- och bakgrunnsfarger.\n\n\
-COLOR [attr [/-F]] \n\n\
-  attr        Anger fargeattributter for konsollteksten\n\
-  /-F         Fyller inte blank plass med fargeattributter\n\n\
+COLOR [attr [/-F]]\n\n\
+  attr        Anger fargeattributter for konsollteksten.\n\
+  /-F         Fyller inte blank plass med fargeattributter.\n\n\
 Det finns tre sätt att ange färgerna:\n\
 1) [bright] namn på [bright] namn  (bara de tre första bokstäverna krävs)\n\
 2) decimal på decimal\n\
@@ -107,6 +103,14 @@ COPY [/V][/Y|/-Y][/A|/B] källa [/A|/B]\n\
                befintlig destinationsfil.\n\n\
 Växeln /Y kan läggas in i COPYCMD miljövariabel.\n\
 ...\n"
+    STRING_CTTY_HELP "Changes the standard I/O terminal device to an auxiliary device.\n\n\
+CTTY device\n\n\
+  device    The terminal device you want to use as the new standard I/O device.\n\
+            This name must refer to a valid character device:\n\
+            AUX, COMx (x=1..N), CON, LPTx (x=1..N), PRN, NUL.\n\
+            CON is usually the default standard I/O device.\n\n\
+To return control to the standard console, type: CTTY CON on the auxiliary\n\
+device."
     STRING_DATE_HELP1 "\nSkriv in nytt datum (mm%cdd%cyyyy): "
     STRING_DATE_HELP2 "\nSkriv in nytt datum (dd%cmm%cyyyy): "
     STRING_DATE_HELP3 "\nSkriv in nytt datum (yyyy%cmm%cdd): "
@@ -138,10 +142,10 @@ ERASE [/N /P /T /Q /S /W /Y /Z /A[[:]attribut]] fil ...\n\n\
     STRING_DEL_HELP2 "Alla filer i mappen kommer att bli raderade!\nÄr du säker (J/N)?"
     STRING_DEL_HELP3 "    %lu fil raderade\n"
     STRING_DEL_HELP4 "    %lu filer raderade\n"
-    STRING_DELAY_HELP "paus i n sekunder eller mikrosekunder\n\
+    STRING_DELAY_HELP "Paus i n sekunder eller mikrosekunder.\n\
 DELAY [/m]n\n\n\
-  /m          anger at n är mikrosekunder\n\
-              annars är n sekunder\n"
+  /m          Anger at n är mikrosekunder\n\
+              annars är n sekunder.\n"
     STRING_DIR_HELP1 "DIR [enhet:][mapp][filnamn] [/A[[:]attribut]] [/B] [/C] [/D] [/L] [/N]\n\
   [/O[[:]sortering]] [/P] [/Q] [/R] [/S] [/T[[:]tidsfält]] [/W] [/X] [/4]\n\n\
   [enhet:][mapp][filnamn]\n\
@@ -467,8 +471,6 @@ tittel        ny tittel\n"
     STRING_ALIAS_ERROR "Kommando linje for lang etter alias utvidelse!\n"
     STRING_ASSOC_ERROR "Fil association ble inte funnet for utvidelsen %s\n"
     STRING_BATCH_ERROR "Feil ved åpning av satsvis fil\n"
-    STRING_CHCP_ERROR1 "Aktiv tegntabell: %u\n"
-    STRING_CHCP_ERROR4 "Ugyldig tegntabell\n"
     STRING_CHOICE_ERROR "Ugyldig  val. Forventet format: /C[:]val"
     STRING_CHOICE_ERROR_TXT "Ugyldig  val. Forventet format: /T[:]c,nn"
     STRING_CHOICE_ERROR_OPTION "Ulovlig operasjon: %s"
@@ -478,8 +480,7 @@ tittel        ny tittel\n"
     STRING_CMD_ERROR4 "Kör %s...\n"
     STRING_CMD_ERROR5 "Kör cmdexit.bat...\n"
     STRING_COLOR_ERROR1 "Samme farge feil! (Bakgrunn och forgrunn kan inte ha samme farge)"
-    STRING_COLOR_ERROR2 "feil i farge spesifikasjon"
-    STRING_COLOR_ERROR3 "Farge %02x\n"
+    STRING_COLOR_ERROR2 "Feil i farge spesifikasjon"
     STRING_CONSOLE_ERROR "Ukjent feil: %d\n"
     STRING_COPY_ERROR1 "Feil: kan inte åpne kilden - %s!\n"
     STRING_COPY_ERROR2 "Feil: kan inte kopiere til seg selv!\n"

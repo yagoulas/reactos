@@ -1,3 +1,10 @@
+/*
+ * PROJECT:     ReactOS USB Port Driver
+ * LICENSE:     GPL-2.0+ (https://spdx.org/licenses/GPL-2.0+)
+ * PURPOSE:     USBPort main driver functions
+ * COPYRIGHT:   Copyright 2017 Vadim Galyant <vgal@rambler.ru>
+ */
+
 #include "usbport.h"
 
 #define NDEBUG
@@ -588,7 +595,7 @@ USBPORT_SoftInterruptDpc(IN PRKDPC Dpc,
     PDEVICE_OBJECT FdoDevice;
     PUSBPORT_DEVICE_EXTENSION FdoExtension;
 
-    DPRINT("USBPORT_SoftInterruptDpc: ... \n");
+    DPRINT_INT("USBPORT_SoftInterruptDpc: ... \n");
 
     FdoDevice = DeferredContext;
     FdoExtension = FdoDevice->DeviceExtension;
@@ -606,7 +613,7 @@ USBPORT_SoftInterrupt(IN PDEVICE_OBJECT FdoDevice)
     PUSBPORT_DEVICE_EXTENSION FdoExtension;
     LARGE_INTEGER DueTime = {{0, 0}};
 
-    DPRINT("USBPORT_SoftInterrupt: ... \n");
+    DPRINT_INT("USBPORT_SoftInterrupt: ... \n");
 
     FdoExtension = FdoDevice->DeviceExtension;
 
@@ -789,7 +796,7 @@ USBPORT_FlushDoneTransfers(IN PDEVICE_OBJECT FdoDevice)
 
             if ((Transfer->Flags & TRANSFER_FLAG_SPLITED))
             {
-                ASSERT(FALSE);// USBPORT_DoneSplitTransfer(Transfer);
+                USBPORT_DoneSplitTransfer(Transfer);
             }
             else
             {
@@ -1079,7 +1086,8 @@ USBPORT_InterruptService(IN PKINTERRUPT Interrupt,
     FdoExtension = FdoDevice->DeviceExtension;
     Packet = &FdoExtension->MiniPortInterface->Packet;
 
-    DPRINT_INT("USBPORT_InterruptService: FdoExtension->Flags - %lx\n",
+    DPRINT_INT("USBPORT_InterruptService: FdoExtension[%p]->Flags - %08X\n",
+           FdoExtension,
            FdoExtension->Flags);
 
     if (FdoExtension->Flags & USBPORT_FLAG_INTERRUPT_ENABLED &&
@@ -1936,7 +1944,7 @@ USBPORT_Unload(IN PDRIVER_OBJECT DriverObject)
     //MiniPortInterface->DriverUnload(DriverObject); // Call MiniPort _HCI_Unload
 }
 
-ULONG
+VOID
 NTAPI
 USBPORT_MiniportCompleteTransfer(IN PVOID MiniPortExtension,
                                  IN PVOID MiniPortEndpoint,
@@ -1945,8 +1953,11 @@ USBPORT_MiniportCompleteTransfer(IN PVOID MiniPortExtension,
                                  IN ULONG TransferLength)
 {
     PUSBPORT_TRANSFER Transfer;
-    PDEVICE_OBJECT FdoDevice;
-    PUSBPORT_DEVICE_EXTENSION FdoExtension;
+    PUSBPORT_TRANSFER ParentTransfer;
+    PUSBPORT_TRANSFER SplitTransfer;
+    PLIST_ENTRY SplitHead;
+    PLIST_ENTRY Entry;
+    KIRQL OldIrql;
 
     DPRINT_CORE("USBPORT_MiniportCompleteTransfer: USBDStatus - %x, TransferLength - %x\n",
                 USBDStatus,
@@ -1956,31 +1967,47 @@ USBPORT_MiniportCompleteTransfer(IN PVOID MiniPortExtension,
                                  USBPORT_TRANSFER,
                                  TransferParameters);
 
-    FdoDevice = Transfer->Endpoint->FdoDevice;
-    FdoExtension = FdoDevice->DeviceExtension;
-
+    Transfer->Flags |= TRANSFER_FLAG_COMPLETED;
     Transfer->CompletedTransferLen = TransferLength;
 
-    RemoveEntryList(&Transfer->TransferLink);
+    if (((Transfer->Flags & TRANSFER_FLAG_SPLITED) == 0) ||
+        TransferLength >= Transfer->TransferParameters.TransferBufferLength)
+    {
+        goto Exit;
+    }
 
-    Transfer->USBDStatus = USBDStatus;
+    ParentTransfer = Transfer->ParentTransfer;
 
-    ExInterlockedInsertTailList(&FdoExtension->DoneTransferList,
-                                &Transfer->TransferLink,
-                                &FdoExtension->DoneTransferSpinLock);
+    KeAcquireSpinLock(&ParentTransfer->TransferSpinLock, &OldIrql);
 
-    return KeInsertQueueDpc(&FdoExtension->TransferFlushDpc, NULL, NULL);
-}
+    if (IsListEmpty(&ParentTransfer->SplitTransfersList))
+    {
+        goto Exit;
+    }
 
-ULONG
-NTAPI
-USBPORT_CompleteIsoTransfer(IN PVOID MiniPortExtension,
-                            IN PVOID MiniPortEndpoint,
-                            IN PVOID TransferParameters,
-                            IN ULONG TransferLength)
-{
-    DPRINT1("USBPORT_CompleteIsoTransfer: UNIMPLEMENTED. FIXME.\n");
-    return 0;
+    SplitHead = &ParentTransfer->SplitTransfersList;
+    Entry = SplitHead->Flink;
+
+    while (Entry && !IsListEmpty(SplitHead))
+    {
+        SplitTransfer = CONTAINING_RECORD(Entry,
+                                          USBPORT_TRANSFER,
+                                          SplitLink);
+
+        if (!(SplitTransfer->Flags & TRANSFER_FLAG_SUBMITED))
+        {
+            DPRINT1("USBPORT_MiniportCompleteTransfer: SplitTransfer->Flags - %X\n",
+                    SplitTransfer->Flags);
+            //Add TRANSFER_FLAG_xxx
+        }
+
+        Entry = Entry->Flink;
+    }
+
+    KeReleaseSpinLock(&ParentTransfer->TransferSpinLock, OldIrql);
+
+Exit:
+    USBPORT_QueueDoneTransfer(Transfer, USBDStatus);
 }
 
 VOID
@@ -2260,6 +2287,9 @@ USBPORT_MapTransfer(IN PDEVICE_OBJECT FdoDevice,
     SIZE_T ElementLength;
     PUSBPORT_DEVICE_HANDLE DeviceHandle;
     PDMA_OPERATIONS DmaOperations;
+    USBD_STATUS USBDStatus;
+    LIST_ENTRY List;
+    PUSBPORT_TRANSFER transfer;
 
     DPRINT_CORE("USBPORT_MapTransfer: ... \n");
 
@@ -2276,12 +2306,12 @@ USBPORT_MapTransfer(IN PDEVICE_OBJECT FdoDevice,
     Mdl = Urb->UrbControlTransfer.TransferBufferMDL;
     CurrentVa = (ULONG_PTR)MmGetMdlVirtualAddress(Mdl);
 
-    Transfer->SgList.CurrentVa = CurrentVa;
-    Transfer->SgList.MappedSystemVa = MmGetSystemAddressForMdlSafe(Mdl, NormalPagePriority);
-
     sgList = &Transfer->SgList;
-    sgList->Flags = 0;
 
+    sgList->Flags = 0;
+    sgList->CurrentVa = CurrentVa;
+    sgList->MappedSystemVa = MmGetSystemAddressForMdlSafe(Mdl,
+                                                          NormalPagePriority);
     Transfer->MapRegisterBase = MapRegisterBase;
 
     ix = 0;
@@ -2309,7 +2339,7 @@ USBPORT_MapTransfer(IN PDEVICE_OBJECT FdoDevice,
 
         do
         {
-            ElementLength = 0x1000 - (PhAddress.LowPart & 0xFFF);
+            ElementLength = PAGE_SIZE - (PhAddress.LowPart & (PAGE_SIZE - 1));
 
             if (ElementLength > SgCurrentLength)
                 ElementLength = SgCurrentLength;
@@ -2331,9 +2361,9 @@ USBPORT_MapTransfer(IN PDEVICE_OBJECT FdoDevice,
         }
         while (SgCurrentLength);
 
-        if ((PhAddr.LowPart == PhAddress.LowPart) &&
-            (PhAddr.HighPart == PhAddress.HighPart))
+        if (PhAddr.QuadPart == PhAddress.QuadPart)
         {
+            DPRINT1("USBPORT_MapTransfer: PhAddr == PhAddress\n");
             ASSERT(FALSE);
         }
 
@@ -2347,15 +2377,52 @@ USBPORT_MapTransfer(IN PDEVICE_OBJECT FdoDevice,
     }
     while (CurrentLength != Transfer->TransferParameters.TransferBufferLength);
 
-    Transfer->SgList.SgElementCount = ix;
+    sgList->SgElementCount = ix;
+
+    if (Endpoint->EndpointProperties.DeviceSpeed == UsbHighSpeed)
+    {
+        Transfer->Flags |= TRANSFER_FLAG_HIGH_SPEED;
+    }
+
     Transfer->Flags |= TRANSFER_FLAG_DMA_MAPPED;
 
-    ASSERT(Transfer->TransferParameters.TransferBufferLength <=
-           Endpoint->EndpointProperties.MaxTransferSize);
+    if ((Transfer->Flags & TRANSFER_FLAG_ISO) == 0)
+    {
+        KeAcquireSpinLock(&Endpoint->EndpointSpinLock,
+                          &Endpoint->EndpointOldIrql);
 
-    KeAcquireSpinLock(&Endpoint->EndpointSpinLock, &Endpoint->EndpointOldIrql);
-    InsertTailList(&Endpoint->TransferList, &Transfer->TransferLink);
-    KeReleaseSpinLock(&Endpoint->EndpointSpinLock, Endpoint->EndpointOldIrql);
+        USBPORT_SplitTransfer(FdoDevice, Endpoint, Transfer, &List);
+
+        while (!IsListEmpty(&List))
+        {
+            transfer = CONTAINING_RECORD(List.Flink,
+                                         USBPORT_TRANSFER,
+                                         TransferLink);
+
+            RemoveHeadList(&List);
+            InsertTailList(&Endpoint->TransferList, &transfer->TransferLink);
+        }
+
+        KeReleaseSpinLock(&Endpoint->EndpointSpinLock,
+                          Endpoint->EndpointOldIrql);
+    }
+    else
+    {
+        USBDStatus = USBPORT_InitializeIsoTransfer(FdoDevice,
+                                                   &Urb->UrbIsochronousTransfer,
+                                                   Transfer);
+
+        if (USBDStatus != USBD_STATUS_SUCCESS)
+        {
+            KeAcquireSpinLock(&Endpoint->EndpointSpinLock,
+                              &Endpoint->EndpointOldIrql);
+
+            USBPORT_QueueDoneTransfer(Transfer, USBDStatus);
+
+            KeReleaseSpinLock(&Endpoint->EndpointSpinLock,
+                              Endpoint->EndpointOldIrql);
+        }
+    }
 
     DeviceHandle = Urb->UrbHeader.UsbdDeviceHandle;
     InterlockedDecrement(&DeviceHandle->DeviceHandleLock);
@@ -2448,6 +2515,7 @@ USBPORT_AllocateTransfer(IN PDEVICE_OBJECT FdoDevice,
     PUSBPORT_TRANSFER Transfer;
     PUSBPORT_PIPE_HANDLE PipeHandle;
     USBD_STATUS USBDStatus;
+    SIZE_T IsoBlockLen = 0;
 
     DPRINT_CORE("USBPORT_AllocateTransfer: FdoDevice - %p, Urb - %p, DeviceHandle - %p, Irp - %p, Event - %p\n",
            FdoDevice,
@@ -2468,15 +2536,24 @@ USBPORT_AllocateTransfer(IN PDEVICE_OBJECT FdoDevice,
 
         PagesNeed = ADDRESS_AND_SIZE_TO_SPAN_PAGES(VirtualAddr,
                                                    TransferLength);
+        if (PagesNeed > 0)
+        {
+            PagesNeed--;
+        }
     }
 
     if (Urb->UrbHeader.Function == URB_FUNCTION_ISOCH_TRANSFER)
     {
-        DPRINT1("USBPORT_AllocateTransfer: ISOCH_TRANSFER UNIMPLEMENTED. FIXME.\n");
+        DPRINT1("USBPORT_AllocateTransfer: ISOCH_TRANSFER UNIMPLEMENTED. FIXME\n");
+
+        //IsoBlockLen = sizeof(USBPORT_ISO_BLOCK) +
+        //              Urb->UrbIsochronousTransfer.NumberOfPackets *
+        //              sizeof(USBPORT_ISO_BLOCK_PACKET);
     }
 
     PortTransferLength = sizeof(USBPORT_TRANSFER) +
-                         PagesNeed * sizeof(USBPORT_SCATTER_GATHER_ELEMENT);
+                         PagesNeed * sizeof(USBPORT_SCATTER_GATHER_ELEMENT) +
+                         IsoBlockLen;
 
     FullTransferLength = PortTransferLength +
                          FdoExtension->MiniPortInterface->Packet.MiniPortTransferSize;
@@ -2485,29 +2562,42 @@ USBPORT_AllocateTransfer(IN PDEVICE_OBJECT FdoDevice,
                                      FullTransferLength,
                                      USB_PORT_TAG);
 
-    if (Transfer)
+    if (!Transfer)
     {
-        RtlZeroMemory(Transfer, FullTransferLength);
-
-        Transfer->Irp = Irp;
-        Transfer->Urb = Urb;
-        Transfer->Endpoint = PipeHandle->Endpoint;
-        Transfer->Event = Event;
-        Transfer->PortTransferLength = PortTransferLength;
-        Transfer->FullTransferLength = FullTransferLength;
-
-        Transfer->MiniportTransfer = (PVOID)((ULONG_PTR)Transfer +
-                                             PortTransferLength);
-
-        Urb->UrbControlTransfer.hca.Reserved8[0] = Transfer;
-        Urb->UrbHeader.UsbdFlags |= USBD_FLAG_ALLOCATED_TRANSFER;
-
-        USBDStatus = USBD_STATUS_SUCCESS;
+        DPRINT1("USBPORT_AllocateTransfer: Transfer not allocated!\n");
+        return USBD_STATUS_INSUFFICIENT_RESOURCES;
     }
-    else
+
+    RtlZeroMemory(Transfer, FullTransferLength);
+
+    Transfer->Irp = Irp;
+    Transfer->Urb = Urb;
+    Transfer->Endpoint = PipeHandle->Endpoint;
+    Transfer->Event = Event;
+    Transfer->PortTransferLength = PortTransferLength;
+    Transfer->FullTransferLength = FullTransferLength;
+    Transfer->IsoBlockPtr = NULL;
+    Transfer->Period = 0;
+    Transfer->ParentTransfer = Transfer;
+
+    if (IsoBlockLen)
     {
-        USBDStatus = USBD_STATUS_INSUFFICIENT_RESOURCES;
+        Transfer->IsoBlockPtr = (PVOID)((ULONG_PTR)Transfer +
+                                 PortTransferLength - IsoBlockLen);
+
+        Transfer->Period = PipeHandle->Endpoint->EndpointProperties.Period;
+        Transfer->Flags |= TRANSFER_FLAG_ISO;
     }
+
+    Transfer->MiniportTransfer = (PVOID)((ULONG_PTR)Transfer +
+                                                    PortTransferLength);
+
+    KeInitializeSpinLock(&Transfer->TransferSpinLock);
+
+    Urb->UrbControlTransfer.hca.Reserved8[0] = Transfer;
+    Urb->UrbHeader.UsbdFlags |= USBD_FLAG_ALLOCATED_TRANSFER;
+
+    USBDStatus = USBD_STATUS_SUCCESS;
 
     DPRINT_CORE("USBPORT_AllocateTransfer: return USBDStatus - %x\n",
                 USBDStatus);

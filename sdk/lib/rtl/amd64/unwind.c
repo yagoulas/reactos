@@ -295,9 +295,9 @@ RtlpTryToUnwindEpilog(
         }
     }
 
-    /* Loop the following instructions */
-    EndAddress = FunctionEntry->EndAddress + ImageBase;
-    while((DWORD64)InstrPtr < EndAddress)
+    /* Loop the following instructions before the ret */
+    EndAddress = FunctionEntry->EndAddress + ImageBase - 1;
+    while ((DWORD64)InstrPtr < EndAddress)
     {
         Instr = *(DWORD*)InstrPtr;
 
@@ -315,20 +315,28 @@ RtlpTryToUnwindEpilog(
         if ( (Instr & 0xf8fb) == 0x5841 )
         {
             /* Opcode is pop r8 .. r15 */
-            Reg = (Instr & 0x7) + 8;
+            Reg = ((Instr >> 8) & 0x7) + 8;
             PopReg(&LocalContext, Reg);
             InstrPtr += 2;
             continue;
         }
 
-        /* Check for retn / retf */
-        if ( (Instr & 0xf7) == 0xc3 )
-        {
-            /* We are finished */
-            break;
-        }
-
         /* Opcode not allowed for Epilog */
+        return FALSE;
+    }
+
+    /* Check if we are at the ret instruction */
+    if ((DWORD64)InstrPtr != EndAddress)
+    {
+        /* If we went past the end of the function, something is broken! */
+        ASSERT((DWORD64)InstrPtr <= EndAddress);
+        return FALSE;
+    }
+
+    /* Make sure this is really a ret instruction */
+    if (*InstrPtr != 0xc3)
+    {
+        ASSERT(FALSE);
         return FALSE;
     }
 
@@ -414,7 +422,7 @@ RtlVirtualUnwind(
         }
     }
 
-    /* Process the left Ops */
+    /* Process the remaining unwind ops */
     while (i < UnwindInfo->CountOfCodes)
     {
         UnwindCode = UnwindInfo->UnwindCode[i];
@@ -524,10 +532,13 @@ RtlWalkFrameChain(OUT PVOID *Callers,
     ULONG64 ControlPc, ImageBase, EstablisherFrame;
     ULONG64 StackLow, StackHigh;
     PVOID HandlerData;
-    ULONG i;
+    ULONG i, FramesToSkip;
     PRUNTIME_FUNCTION FunctionEntry;
 
     DPRINT("Enter RtlWalkFrameChain\n");
+
+    /* The upper bits in Flags define how many frames to skip */
+    FramesToSkip = Flags >> 8;
 
     /* Capture the current Context */
     RtlCaptureContext(&Context);
@@ -537,12 +548,12 @@ RtlWalkFrameChain(OUT PVOID *Callers,
     RtlpGetStackLimits(&StackLow, &StackHigh);
 
     /* Check if we want the user-mode stack frame */
-    if (Flags == 1)
+    if (Flags & 1)
     {
     }
 
     /* Loop the frames */
-    for (i = 0; i < Count; i++)
+    for (i = 0; i < FramesToSkip + Count; i++)
     {
         /* Lookup the FunctionEntry for the current ControlPc */
         FunctionEntry = RtlLookupFunctionEntry(ControlPc, &ImageBase, NULL);
@@ -579,9 +590,14 @@ RtlWalkFrameChain(OUT PVOID *Callers,
             break;
         }
 
-        /* Save this frame and continue with new Rip */
+        /* Continue with new Rip */
         ControlPc = Context.Rip;
-        Callers[i] = (PVOID)ControlPc;
+
+        /* Save value, if we are past the frames to skip */
+        if (i >= FramesToSkip)
+        {
+            Callers[i - FramesToSkip] = (PVOID)ControlPc;
+        }
     }
 
     DPRINT("RtlWalkFrameChain returns %ld\n", i);
@@ -605,14 +621,8 @@ RtlGetCallersAddress(
      * RtlWalkFrameChain -> RtlGetCallersAddress -> x -> y */
     Number = RtlWalkFrameChain(Callers, 4, 0);
 
-    if (CallersAddress)
-    {
-        *CallersAddress = (Number >= 3) ? Callers[2] : NULL;
-    }
-    if (CallersCaller)
-    {
-        *CallersCaller = (Number == 4) ? Callers[3] : NULL;
-    }
+    *CallersAddress = (Number >= 3) ? Callers[2] : NULL;
+    *CallersCaller = (Number == 4) ? Callers[3] : NULL;
 
     return;
 }

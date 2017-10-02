@@ -22,7 +22,7 @@ static NTSTATUS
 LsapDeregisterLogonProcess(PLSA_API_MSG RequestMsg,
                            PLSAP_LOGON_CONTEXT LogonContext)
 {
-    TRACE("(%p %p)\n", RequestMsg, LogonContext);
+    TRACE("LsapDeregisterLogonProcess(%p %p)\n", RequestMsg, LogonContext);
 
     RemoveHeadList(&LogonContext->Entry);
 
@@ -44,7 +44,7 @@ LsapCheckLogonProcess(PLSA_API_MSG RequestMsg,
     PLSAP_LOGON_CONTEXT Context = NULL;
     NTSTATUS Status;
 
-    TRACE("(%p)\n", RequestMsg);
+    TRACE("LsapCheckLogonProcess(%p)\n", RequestMsg);
 
     TRACE("Client ID: %p %p\n", RequestMsg->h.ClientId.UniqueProcess, RequestMsg->h.ClientId.UniqueThread);
 
@@ -93,11 +93,11 @@ LsapHandlePortConnection(PLSA_API_MSG RequestMsg)
     REMOTE_PORT_VIEW RemotePortView;
     NTSTATUS Status = STATUS_SUCCESS;
 
-    TRACE("(%p)\n", RequestMsg);
+    TRACE("LsapHandlePortConnection(%p)\n", RequestMsg);
 
     TRACE("Logon Process Name: %s\n", RequestMsg->ConnectInfo.LogonProcessNameBuffer);
 
-    if (RequestMsg->ConnectInfo.CreateContext == TRUE)
+    if (RequestMsg->ConnectInfo.CreateContext != FALSE)
     {
         Status = LsapCheckLogonProcess(RequestMsg,
                                        &LogonContext);
@@ -129,7 +129,7 @@ LsapHandlePortConnection(PLSA_API_MSG RequestMsg)
         return Status;
     }
 
-    if (Accept == TRUE)
+    if (Accept != FALSE)
     {
         if (LogonContext != NULL)
         {

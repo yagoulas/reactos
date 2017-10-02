@@ -49,10 +49,6 @@ CD[..|.]\n\n\
 Geben Sie CD Laufwerk: ein, um das aktuelle Verzeichnis auf dem angegebenen\n\
 Laufwerk anzuzeigen.\n\
 Mit CD ohne Parameter wird das aktuelle Laufwerk und Verzeichnis angezeigt."
-    STRING_CHCP_HELP "Zeigt die aktuelle Codepage an oder wechselt diese.\n\n\
-CHCP [nnn]\n\n\
-  nnn   Codepage angeben.\n\n\
-Der Befehl CHCP ohne Parameter zeigt die Nummer der aktuellen Codepage an."
     STRING_CHOICE_HELP "Wartet auf Auswahl einer Option durch den Benutzer.\n\n\
 CHOICE  [/C[:]optionen][/N][/S][/T[:]c,nn][text]\n\n\
   /C[:]optionen  Die erlaubten Tasten festlegen. Standard-Tasten sind Y und N.\n\
@@ -78,9 +74,9 @@ CMD [/[C|K] Befehl][/P][/Q][/T:bf]\n\n\
                 (kann nicht beendet werden).\n\
   /T:bf         Ändert die Hintergrund- und Vordergrund-Farbe (siehe COLOR Befehl)."
     STRING_COLOR_HELP1 "Legt die Standardhinter- und Vordergrundfarben für die Konsole fest.\n\n\
-COLOR [attr [/F]] \n\n\
+COLOR [attr [/-F]]\n\n\
   attr        Gibt die Farbattribute für die Konsolenausgabe an.\n\
-  /F          Füllt die Konsolenausgabe mit dem Farbattribut\n\n\
+  /-F         Füllt nicht die Konsolenausgabe mit dem Farbattribut.\n\n\
 Es gibt 2 Möglichkeiten, die Farben festzulegen:\n\
 2) Zwei Dezimalzahlen\n\
 3) Zwei Hexadezimalziffern\n\n\
@@ -114,6 +110,14 @@ COPY [/V][/Y|/-Y][/A|/B] \n\
                Bestätigen auf.\n\n\
 Die Option /Y ist möglicherweise in der Umgebungsvariablen COPYCMD definiert.\n\
 ..."
+    STRING_CTTY_HELP "Changes the standard I/O terminal device to an auxiliary device.\n\n\
+CTTY device\n\n\
+  device    The terminal device you want to use as the new standard I/O device.\n\
+            This name must refer to a valid character device:\n\
+            AUX, COMx (x=1..N), CON, LPTx (x=1..N), PRN, NUL.\n\
+            CON is usually the default standard I/O device.\n\n\
+To return control to the standard console, type: CTTY CON on the auxiliary\n\
+device."
     STRING_DATE_HELP1 "\nGeben Sie das neue Datum ein (mm%cdd%cyyyy): "
     STRING_DATE_HELP2 "\nGeben Sie das neue Datum ein (dd%cmm%cyyyy): "
     STRING_DATE_HELP3 "\nGeben Sie das neue Datum ein (yyyy%cmm%cdd): "
@@ -137,9 +141,9 @@ ERASE [/N /P /T /Q /W /Y /Z] Dateinamen ...\n\n\
     STRING_DEL_HELP2 "Alle Dateien in diesem Verzeichnis werden gelöscht!\nSind Sie sich sicher (J/N)?"
     STRING_DEL_HELP3 "    %lu Datei(en) gelöscht\n"
     STRING_DEL_HELP4 "    %lu Datei(en) gelöscht\n"
-    STRING_DELAY_HELP "Pause für n Sekunden oder Millisekunden\n\
+    STRING_DELAY_HELP "Pause für n Sekunden oder Millisekunden.\n\
 DELAY [/m]n\n\n\
-  /m          Millisekunden, ansonsten Sekunden\n"
+  /m          Millisekunden, ansonsten Sekunden.\n"
     STRING_DIR_HELP1 "Listet die Dateien und Unterverzeichnisse eines Verzeichnisses auf.\n\n\
 DIR [Laufwerk:][Pfad][Dateiname] [/A[[:]Attribute]] [/B] [/C] [/D] [/L] [/N]\n\
   [/O[[:]Reihenfolge]] [/P] [/Q] [/R] [/S] [/T[[:]timefield]] [/W] [/X] [/4]\n\n\
@@ -468,8 +472,6 @@ Titel         neuer Titel"
     STRING_ALIAS_ERROR "Die Befehlszeile ist zu lange nach der Alias-Erweiterung!\n"
     STRING_ASSOC_ERROR "Dateizuordnung für Erweiterung %s nicht gefunden\n"
     STRING_BATCH_ERROR "Es trat ein Fehler auf, während die Batchdatei geöffnet wurde.\n"
-    STRING_CHCP_ERROR1 "Aktive Codepage: %u\n"
-    STRING_CHCP_ERROR4 "Ungültige Codepage\n"
     STRING_CHOICE_ERROR "Ungültige Option. Erwartetes Format: /C[:]Optionen"
     STRING_CHOICE_ERROR_TXT "Ungültige Option. Erwartetes Format: /T[:]c,nn"
     STRING_CHOICE_ERROR_OPTION "Ungültige Option: %s"
@@ -480,7 +482,6 @@ Titel         neuer Titel"
     STRING_CMD_ERROR5 "Ausführend cmdexit.bat...\n"
     STRING_COLOR_ERROR1 "Fehler: Hinter- und Vordergrund können nicht die selben Farben haben!"
     STRING_COLOR_ERROR2 "Fehler in der Farbangabe"
-    STRING_COLOR_ERROR3 "Farbe %02x\n"
     STRING_CONSOLE_ERROR "Unbekannter Fehler: %d\n"
     STRING_COPY_ERROR1 "Fehler: Quelle kann nicht geöffnet werden - %s!\n"
     STRING_COPY_ERROR2 "Fehler: Kann nicht über sich selbst kopiert werden.\n"

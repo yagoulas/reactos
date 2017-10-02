@@ -14,9 +14,9 @@ add_rpc_files(client
     ${REACTOS_SOURCE_DIR}/sdk/include/reactos/idl/wkssvc.idl)
 
 list(APPEND SOURCE
-    access.c
     apibuf.c
     browser.c
+    display.c
     dssetup.c
     group.c
     local_group.c
@@ -31,6 +31,7 @@ list(APPEND SOURCE
     schedule.c
     srvsvc.c
     user.c
+    utils.c
     wksta.c
     wksta_new.c
     netapi32.h

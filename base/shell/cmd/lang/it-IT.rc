@@ -46,10 +46,6 @@ CD[..|.]\n\n\
   /D   Cambia il disco e la cartella corrente.\n\n\
 Scrivi CD disco: per visualizzare la cartella corrente del disco indicato.\n\
 Scrivi CD senza parametri per visualizzare il disco e la cartella corrente.\n"
-    STRING_CHCP_HELP "Visualizza o attiva il numero di tabella dei codici.\n\n\
-CHCP [nnn]\n\n\
-  nnn   Indica il numero di tabella dei codici.\n\n\
-Scrivi CHCP senza parametri per visualizzare il numero attuale.\n"
     STRING_CHOICE_HELP "Aspetta che l'utente scelga una delle scelte disponibili.\n\n\
 CHOICE  [/C[:]scelta][/N][/S][/T[:]c,nn][testo]\n\n\
   /C[:]scelta   Indica i tasti ammessi. Sono predefiniti YN.\n\
@@ -75,9 +71,9 @@ CMD [/[C|K] comando][/P][/Q][/T:bf]\n\n\
   /T:bf       Definisce i colori di primo piano e sfondo\n\
               (vedi anche il comando COLOR).\n"
     STRING_COLOR_HELP1 "Definisce i colori predefiniti di primo piano e sfondo.\n\n\
-COLOR [attr [/-F]] \n\n\
-  attr        Indica gli attributi di colore per i messaggi su console\n\
-  /-F         Non riempie lo spazio vuoto della console con gli attributi di colore\n\n\
+COLOR [attr [/-F]]\n\n\
+  attr        Indica gli attributi di colore per i messaggi su console.\n\
+  /-F         Non riempie lo spazio vuoto della console con gli attributi di colore.\n\n\
 Ci sono tre modi per indicare i colori:\n\
 1) [bright] nome su [bright] nome  (sono necessarie solo le prime tre lettere)\n\
 2) decimale su decimale\n\
@@ -107,6 +103,14 @@ COPY [/V][/Y|/-Y][/A|/B] sorgente [/A|/B]\n\
                di un file di destinazione già esistente.\n\n\
 La selezione  /Y può trovarsi nella variabile di ambiente  COPYCMD .\n\
 ...\n"
+    STRING_CTTY_HELP "Changes the standard I/O terminal device to an auxiliary device.\n\n\
+CTTY device\n\n\
+  device    The terminal device you want to use as the new standard I/O device.\n\
+            This name must refer to a valid character device:\n\
+            AUX, COMx (x=1..N), CON, LPTx (x=1..N), PRN, NUL.\n\
+            CON is usually the default standard I/O device.\n\n\
+To return control to the standard console, type: CTTY CON on the auxiliary\n\
+device."
     STRING_DATE_HELP1 "\nScrivi la nuova data (mm%cdd%cyyyy): "
     STRING_DATE_HELP2 "\nScrivi la nuova data (dd%cmm%cyyyy): "
     STRING_DATE_HELP3 "\nnScrivi la nuova data (yyyy%cmm%cdd): "
@@ -138,10 +142,10 @@ ERASE [/N /P /T /Q /S /W /Y /Z /A[[:]attributi]] file ...\n\n\
     STRING_DEL_HELP2 "Tutti i file nella cartella saranno cancellati!\nSei sicuro (S/N)?"
     STRING_DEL_HELP3 "    %lu file cancellato\n"
     STRING_DEL_HELP4 "    %lu file cancellati\n"
-    STRING_DELAY_HELP "aspetta per il tempo indicato in secondi o millisecondi\n\
+    STRING_DELAY_HELP "Aspetta per il tempo indicato in secondi o millisecondi.\n\
 DELAY [/m]n\n\n\
-  /m          precisa che n è in millisecondi\n\
-              altrimenti n è in secondi\n"
+  /m          Precisa che n è in millisecondi\n\
+              altrimenti n è in secondi.\n"
     STRING_DIR_HELP1 "DIR [disco:][percorso][nomefilen] [/A[[:]attributi]] [/B] [/C] [/D] [/L] [/N]\n\
   [/O[[:]orderinamento]] [/P] [/Q] [/R] [/S] [/T[[:]tempo]] [/W] [/X] [/4]\n\n\
   [disco:][percorso][nomefilen]\n\
@@ -479,8 +483,6 @@ titolo        il nuovo titolo\n"
     STRING_ALIAS_ERROR "Linea di comando troppo lunga dopo l'espansione degli alias!\n"
     STRING_ASSOC_ERROR "File association not found for extension %s\n"
     STRING_BATCH_ERROR "Errore durante l'apertura di un batch\n"
-    STRING_CHCP_ERROR1 "Tabella dei codici attiva: %u\n"
-    STRING_CHCP_ERROR4 "Tabella dei codici non valida\n"
     STRING_CHOICE_ERROR "Opzione non valida. Formato atteso: /C[:]opzioni"
     STRING_CHOICE_ERROR_TXT "Opzione non valida. Formato atteso: /T[:]c,nn"
     STRING_CHOICE_ERROR_OPTION "Opzione non valida: %s"
@@ -490,9 +492,8 @@ titolo        il nuovo titolo\n"
     STRING_CMD_ERROR4 "Esecuzione di %s...\n"
     STRING_CMD_ERROR5 "Esecuzione di cmdexit.bat...\n"
     STRING_COLOR_ERROR1 "Il colore di primo piano e sfondo non possono essere uguali"
-    STRING_COLOR_ERROR2 "errore nella indicazione dei colori"
-    STRING_COLOR_ERROR3 "Colore %02x\n"
-    STRING_CONSOLE_ERROR "errore sconosciuto: %d\n"
+    STRING_COLOR_ERROR2 "Errore nella indicazione dei colori"
+    STRING_CONSOLE_ERROR "Errore sconosciuto: %d\n"
     STRING_COPY_ERROR1 "Errore: Impossibile aprire il file sorgente - %s!\n"
     STRING_COPY_ERROR2 "Errore: Impossibile copiare un file su se stesso!\n"
     STRING_COPY_ERROR3 "Errore durante la scrittura della destinazione!\n"

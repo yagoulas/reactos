@@ -1,3 +1,10 @@
+/*
+ * PROJECT:     ReactOS USB Port Driver
+ * LICENSE:     GPL-2.0+ (https://spdx.org/licenses/GPL-2.0+)
+ * PURPOSE:     USBPort endpoint functions
+ * COPYRIGHT:   Copyright 2017 Vadim Galyant <vgal@rambler.ru>
+ */
+
 #include "usbport.h"
 
 #define NDEBUG
@@ -1279,8 +1286,7 @@ USBPORT_DmaEndpointPaused(IN PDEVICE_OBJECT FdoDevice,
 
             if (Transfer->Flags & TRANSFER_FLAG_SPLITED)
             {
-                DPRINT1("USBPORT_DmaEndpointActive: FIXME call USBPORT_CancelSplitTransfer\n");
-                ASSERT(FALSE); //USBPORT_CancelSplitTransfer();
+                USBPORT_CancelSplitTransfer(Transfer);
             }
             else
             {

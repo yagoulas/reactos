@@ -145,10 +145,6 @@
 #include <reactos/buildno.h>
 #include <reactos/version.h>
 
-#ifndef NT_SUCCESS
-#define NT_SUCCESS(StatCode)  ((NTSTATUS)(StatCode) >= 0)
-#endif
-
 typedef NTSTATUS (WINAPI *NtQueryInformationProcessProc)(HANDLE, PROCESSINFOCLASS,
                                                           PVOID, ULONG, PULONG);
 typedef NTSTATUS (WINAPI *NtReadVirtualMemoryProc)(HANDLE, PVOID, PVOID, ULONG, PULONG);
@@ -160,21 +156,25 @@ BOOL bIgnoreEcho = FALSE; /* Set this to TRUE to prevent a newline, when executi
 static BOOL bWaitForCommand = FALSE; /* When we are executing something passed on the commandline after /c or /k */
 INT  nErrorLevel = 0;     /* Errorlevel of last launched external program */
 CRITICAL_SECTION ChildProcessRunningLock;
-BOOL bUnicodeOutput = FALSE;
 BOOL bDisableBatchEcho = FALSE;
+BOOL bEnableExtensions = TRUE;
 BOOL bDelayedExpansion = FALSE;
 BOOL bTitleSet = FALSE;
 DWORD dwChildProcessId = 0;
-HANDLE hIn;
-HANDLE hOut;
 LPTSTR lpOriginalEnvironment;
 HANDLE CMD_ModuleHandle;
 
 static NtQueryInformationProcessProc NtQueryInformationProcessPtr = NULL;
 static NtReadVirtualMemoryProc       NtReadVirtualMemoryPtr = NULL;
 
+/*
+ * Default output file stream translation mode is UTF8, but CMD switches
+ * allow to change it to either UTF16 (/U) or ANSI (/A).
+ */
+CON_STREAM_MODE OutputStreamMode = UTF8Text; // AnsiText;
+
 #ifdef INCLUDE_CMD_COLOR
-WORD wDefColor;           /* default color */
+WORD wDefColor = 0;     /* Default color */
 #endif
 
 /*
@@ -315,10 +315,11 @@ Execute(LPTSTR Full, LPTSTR First, LPTSTR Rest, PARSED_COMMAND *Cmd)
 {
     TCHAR szFullName[MAX_PATH];
     TCHAR *first, *rest, *dot;
-    TCHAR szWindowTitle[MAX_PATH], szNewTitle[MAX_PATH*2];
+    TCHAR szWindowTitle[MAX_PATH];
+    TCHAR szNewTitle[MAX_PATH*2];
     DWORD dwExitCode = 0;
     TCHAR *FirstEnd;
-    TCHAR szFullCmdLine [CMDLINE_LENGTH];
+    TCHAR szFullCmdLine[CMDLINE_LENGTH];
 
     TRACE ("Execute: \'%s\' \'%s\'\n", debugstr_aw(First), debugstr_aw(Rest));
 
@@ -378,10 +379,11 @@ Execute(LPTSTR Full, LPTSTR First, LPTSTR Rest, PARSED_COMMAND *Cmd)
         return 1;
     }
 
+    /* Save the original console title and build a new one */
     GetConsoleTitle(szWindowTitle, ARRAYSIZE(szWindowTitle));
     bTitleSet = FALSE;
     _stprintf(szNewTitle, _T("%s - %s%s"), szWindowTitle, First, Rest);
-    SetConsoleTitle(szNewTitle);
+    ConSetTitle(szNewTitle);
 
     /* check if this is a .BAT or .CMD file */
     dot = _tcsrchr (szFullName, _T('.'));
@@ -419,7 +421,7 @@ Execute(LPTSTR Full, LPTSTR First, LPTSTR Rest, PARSED_COMMAND *Cmd)
         stui.wShowWindow = SW_SHOWDEFAULT;
 
         /* Set the console to standard mode */
-        SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE),
+        SetConsoleMode(ConStreamGetOSHandle(StdIn),
                        ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
 
         if (CreateProcess(szFullName,
@@ -470,17 +472,36 @@ Execute(LPTSTR Full, LPTSTR First, LPTSTR Rest, PARSED_COMMAND *Cmd)
         }
 
         /* Restore our default console mode */
-        SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE),
+        SetConsoleMode(ConStreamGetOSHandle(StdIn),
                        ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
-        SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE),
+        SetConsoleMode(ConStreamGetOSHandle(StdOut),
                        ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT);
     }
 
-    /* Get code page if it has been changed */
-    InputCodePage= GetConsoleCP();
-    OutputCodePage = GetConsoleOutputCP();
+    /* Update our local codepage cache */
+    {
+        UINT uNewInputCodePage  = GetConsoleCP();
+        UINT uNewOutputCodePage = GetConsoleOutputCP();
+
+        if ((InputCodePage  != uNewInputCodePage) ||
+            (OutputCodePage != uNewOutputCodePage))
+        {
+            /* Update the locale as well */
+            InitLocale();
+        }
+
+        InputCodePage  = uNewInputCodePage;
+        OutputCodePage = uNewOutputCodePage;
+
+        /* Update the streams codepage cache as well */
+        ConStreamSetCacheCodePage(StdIn , InputCodePage );
+        ConStreamSetCacheCodePage(StdOut, OutputCodePage);
+        ConStreamSetCacheCodePage(StdErr, OutputCodePage);
+    }
+
+    /* Restore the original console title */
     if (!bTitleSet)
-        SetConsoleTitle(szWindowTitle);
+        ConSetTitle(szWindowTitle);
 
     return dwExitCode;
 }
@@ -564,7 +585,7 @@ DoCommand(LPTSTR first, LPTSTR rest, PARSED_COMMAND *Cmd)
  * process the command line and execute the appropriate functions
  * full input/output redirection and piping are supported
  */
-INT ParseCommandLine (LPTSTR cmd)
+INT ParseCommandLine(LPTSTR cmd)
 {
     INT Ret = 0;
     PARSED_COMMAND *Cmd = ParseCommand(cmd);
@@ -590,7 +611,7 @@ ExecuteAsync(PARSED_COMMAND *Cmd)
     PROCESS_INFORMATION prci;
 
     /* Get the path to cmd.exe */
-    GetModuleFileName(NULL, CmdPath, MAX_PATH);
+    GetModuleFileName(NULL, CmdPath, ARRAYSIZE(CmdPath));
 
     /* Build the parameter string to pass to cmd.exe */
     ParamsEnd = _stpcpy(CmdParams, _T("/S/D/C\""));
@@ -1413,7 +1434,7 @@ ReadLine(TCHAR *commandline, BOOL bMore)
 }
 
 static VOID
-ProcessInput()
+ProcessInput(VOID)
 {
     PARSED_COMMAND *Cmd;
 
@@ -1472,7 +1493,7 @@ BOOL WINAPI BreakHandler(DWORD dwCtrlType)
     rec.Event.KeyEvent.uChar.UnicodeChar = _T('C');
     rec.Event.KeyEvent.dwControlKeyState = RIGHT_CTRL_PRESSED;
 
-    WriteConsoleInput(hIn,
+    WriteConsoleInput(ConStreamGetOSHandle(StdIn),
                       &rec,
                       1,
                       &dwWritten);
@@ -1486,15 +1507,15 @@ BOOL WINAPI BreakHandler(DWORD dwCtrlType)
 }
 
 
-VOID AddBreakHandler (VOID)
+VOID AddBreakHandler(VOID)
 {
-    SetConsoleCtrlHandler ((PHANDLER_ROUTINE)BreakHandler, TRUE);
+    SetConsoleCtrlHandler(BreakHandler, TRUE);
 }
 
 
-VOID RemoveBreakHandler (VOID)
+VOID RemoveBreakHandler(VOID)
 {
-    SetConsoleCtrlHandler ((PHANDLER_ROUTINE)BreakHandler, FALSE);
+    SetConsoleCtrlHandler(BreakHandler, FALSE);
 }
 
 
@@ -1504,7 +1525,7 @@ VOID RemoveBreakHandler (VOID)
  */
 #if 0
 static VOID
-ShowCommands (VOID)
+ShowCommands(VOID)
 {
     /* print command list */
     ConOutResPuts(STRING_CMD_HELP1);
@@ -1532,31 +1553,186 @@ ShowCommands (VOID)
 }
 #endif
 
-static VOID
-ExecuteAutoRunFile(HKEY hkeyRoot)
-{
-    TCHAR autorun[2048];
-    DWORD len = sizeof autorun;
-    HKEY hkey;
 
-    if (RegOpenKeyEx(hkeyRoot,
-                     _T("SOFTWARE\\Microsoft\\Command Processor"),
-                     0,
-                     KEY_READ,
-                     &hkey) == ERROR_SUCCESS)
+static VOID
+LoadRegistrySettings(HKEY hKeyRoot)
+{
+    LONG lRet;
+    HKEY hKey;
+    DWORD dwType, len;
+    /*
+     * Buffer big enough to hold the string L"4294967295",
+     * corresponding to the literal 0xFFFFFFFF (MAX_ULONG) in decimal.
+     */
+    DWORD Buffer[6];
+
+    lRet = RegOpenKeyEx(hKeyRoot,
+                        _T("Software\\Microsoft\\Command Processor"),
+                        0,
+                        KEY_QUERY_VALUE,
+                        &hKey);
+    if (lRet != ERROR_SUCCESS)
+        return;
+
+#ifdef INCLUDE_CMD_COLOR
+    len = sizeof(Buffer);
+    lRet = RegQueryValueEx(hKey,
+                           _T("DefaultColor"),
+                           NULL,
+                           &dwType,
+                           (LPBYTE)&Buffer,
+                           &len);
+    if (lRet == ERROR_SUCCESS)
     {
-        if (RegQueryValueEx(hkey,
-                           _T("AutoRun"),
-                           0,
-                           0,
-                           (LPBYTE)autorun,
-                           &len) == ERROR_SUCCESS)
-        {
-            if (*autorun)
-                ParseCommandLine(autorun);
-        }
-        RegCloseKey(hkey);
+        /* Overwrite the default attributes */
+        if (dwType == REG_DWORD)
+            wDefColor = (WORD)*(PDWORD)Buffer;
+        else if (dwType == REG_SZ)
+            wDefColor = (WORD)_tcstol((PTSTR)Buffer, NULL, 0);
     }
+    // else, use the default attributes retrieved before.
+#endif
+
+#if 0
+    len = sizeof(Buffer);
+    lRet = RegQueryValueEx(hKey,
+                           _T("DisableUNCCheck"),
+                           NULL,
+                           &dwType,
+                           (LPBYTE)&Buffer,
+                           &len);
+    if (lRet == ERROR_SUCCESS)
+    {
+        /* Overwrite the default setting */
+        if (dwType == REG_DWORD)
+            bDisableUNCCheck = !!*(PDWORD)Buffer;
+        else if (dwType == REG_SZ)
+            bDisableUNCCheck = (_ttol((PTSTR)Buffer) == 1);
+    }
+    // else, use the default setting set globally.
+#endif
+
+    len = sizeof(Buffer);
+    lRet = RegQueryValueEx(hKey,
+                           _T("DelayedExpansion"),
+                           NULL,
+                           &dwType,
+                           (LPBYTE)&Buffer,
+                           &len);
+    if (lRet == ERROR_SUCCESS)
+    {
+        /* Overwrite the default setting */
+        if (dwType == REG_DWORD)
+            bDelayedExpansion = !!*(PDWORD)Buffer;
+        else if (dwType == REG_SZ)
+            bDelayedExpansion = (_ttol((PTSTR)Buffer) == 1);
+    }
+    // else, use the default setting set globally.
+
+    len = sizeof(Buffer);
+    lRet = RegQueryValueEx(hKey,
+                           _T("EnableExtensions"),
+                           NULL,
+                           &dwType,
+                           (LPBYTE)&Buffer,
+                           &len);
+    if (lRet == ERROR_SUCCESS)
+    {
+        /* Overwrite the default setting */
+        if (dwType == REG_DWORD)
+            bEnableExtensions = !!*(PDWORD)Buffer;
+        else if (dwType == REG_SZ)
+            bEnableExtensions = (_ttol((PTSTR)Buffer) == 1);
+    }
+    // else, use the default setting set globally.
+
+    len = sizeof(Buffer);
+    lRet = RegQueryValueEx(hKey,
+                           _T("CompletionChar"),
+                           NULL,
+                           &dwType,
+                           (LPBYTE)&Buffer,
+                           &len);
+    if (lRet == ERROR_SUCCESS)
+    {
+        /* Overwrite the default setting */
+        if (dwType == REG_DWORD)
+            AutoCompletionChar = (TCHAR)*(PDWORD)Buffer;
+        else if (dwType == REG_SZ)
+            AutoCompletionChar = (TCHAR)_tcstol((PTSTR)Buffer, NULL, 0);
+    }
+    // else, use the default setting set globally.
+
+    /* Validity check */
+    if (IS_COMPLETION_DISABLED(AutoCompletionChar))
+    {
+        /* Disable autocompletion */
+        AutoCompletionChar = 0x20;
+    }
+
+    len = sizeof(Buffer);
+    lRet = RegQueryValueEx(hKey,
+                           _T("PathCompletionChar"),
+                           NULL,
+                           &dwType,
+                           (LPBYTE)&Buffer,
+                           &len);
+    if (lRet == ERROR_SUCCESS)
+    {
+        /* Overwrite the default setting */
+        if (dwType == REG_DWORD)
+            PathCompletionChar = (TCHAR)*(PDWORD)Buffer;
+        else if (dwType == REG_SZ)
+            PathCompletionChar = (TCHAR)_tcstol((PTSTR)Buffer, NULL, 0);
+    }
+    // else, use the default setting set globally.
+
+    /* Validity check */
+    if (IS_COMPLETION_DISABLED(PathCompletionChar))
+    {
+        /* Disable autocompletion */
+        PathCompletionChar = 0x20;
+    }
+
+    /* Adjust completion chars */
+    if (PathCompletionChar >= 0x20 && AutoCompletionChar < 0x20)
+        PathCompletionChar = AutoCompletionChar;
+    else if (AutoCompletionChar >= 0x20 && PathCompletionChar < 0x20)
+        AutoCompletionChar = PathCompletionChar;
+
+    RegCloseKey(hKey);
+}
+
+static VOID
+ExecuteAutoRunFile(HKEY hKeyRoot)
+{
+    LONG lRet;
+    HKEY hKey;
+    DWORD dwType, len;
+    TCHAR AutoRun[2048];
+
+    lRet = RegOpenKeyEx(hKeyRoot,
+                        _T("Software\\Microsoft\\Command Processor"),
+                        0,
+                        KEY_QUERY_VALUE,
+                        &hKey);
+    if (lRet != ERROR_SUCCESS)
+        return;
+
+    len = sizeof(AutoRun);
+    lRet = RegQueryValueEx(hKey,
+                           _T("AutoRun"),
+                           NULL,
+                           &dwType,
+                           (LPBYTE)&AutoRun,
+                           &len);
+    if ((lRet == ERROR_SUCCESS) && (dwType == REG_EXPAND_SZ || dwType == REG_SZ))
+    {
+        if (*AutoRun)
+            ParseCommandLine(AutoRun);
+    }
+
+    RegCloseKey(hKey);
 }
 
 /* Get the command that comes after a /C or /K switch */
@@ -1612,18 +1788,20 @@ GetCmdLineCommand(TCHAR *commandline, TCHAR *ptr, BOOL AlwaysStrip)
     _tcscpy(commandline, ptr);
 }
 
+
 /*
- * set up global initializations and process parameters
+ * Set up global initializations and process parameters
  */
 static VOID
-Initialize()
+Initialize(VOID)
 {
     HMODULE NtDllModule;
     TCHAR commandline[CMDLINE_LENGTH];
     TCHAR ModuleName[_MAX_PATH + 1];
     INT nExitCode;
 
-    //INT len;
+    HANDLE hIn, hOut;
+
     TCHAR *ptr, *cmdLine, option = 0;
     BOOL AlwaysStrip = FALSE;
     BOOL AutoRun = TRUE;
@@ -1641,27 +1819,28 @@ Initialize()
         NtReadVirtualMemoryPtr = (NtReadVirtualMemoryProc)GetProcAddress(NtDllModule, "NtReadVirtualMemory");
     }
 
-    InitLocale();
+    /* Load the registry settings */
+    LoadRegistrySettings(HKEY_LOCAL_MACHINE);
+    LoadRegistrySettings(HKEY_CURRENT_USER);
 
-    /* get default input and output console handles */
-    hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    hIn  = GetStdHandle(STD_INPUT_HANDLE);
+    /* Initialize our locale */
+    InitLocale();
 
     /* Initialize prompt support */
     InitPrompt();
 
 #ifdef FEATURE_DIR_STACK
-    /* initialize directory stack */
+    /* Initialize directory stack */
     InitDirectoryStack();
 #endif
 
 #ifdef FEATURE_HISTORY
-    /*initialize history*/
+    /* Initialize history */
     InitHistory();
 #endif
 
     /* Set COMSPEC environment variable */
-    if (0 != GetModuleFileName (NULL, ModuleName, _MAX_PATH + 1))
+    if (GetModuleFileName(NULL, ModuleName, ARRAYSIZE(ModuleName)) != 0)
     {
         ModuleName[_MAX_PATH] = _T('\0');
         SetEnvironmentVariable (_T("COMSPEC"), ModuleName);
@@ -1671,6 +1850,8 @@ Initialize()
     AddBreakHandler();
 
     /* Set our default console mode */
+    hOut = ConStreamGetOSHandle(StdOut);
+    hIn  = ConStreamGetOSHandle(StdIn);
     SetConsoleMode(hOut, 0); // Reinitialize the console output mode
     SetConsoleMode(hOut, ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT);
     SetConsoleMode(hIn , ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
@@ -1709,7 +1890,7 @@ Initialize()
             }
             else if (option == _T('A'))
             {
-                bUnicodeOutput = FALSE;
+                OutputStreamMode = AnsiText;
             }
             else if (option == _T('C') || option == _T('K') || option == _T('R'))
             {
@@ -1731,21 +1912,55 @@ Initialize()
 #ifdef INCLUDE_CMD_COLOR
             else if (!_tcsnicmp(ptr, _T("/T:"), 3))
             {
-                /* process /T (color) argument */
+                /* Process /T (color) argument; overwrite any previous settings */
                 wDefColor = (WORD)_tcstoul(&ptr[3], &ptr, 16);
-                SetScreenColor(wDefColor, FALSE);
             }
 #endif
             else if (option == _T('U'))
             {
-                bUnicodeOutput = TRUE;
+                OutputStreamMode = UTF16Text;
             }
             else if (option == _T('V'))
             {
+                // FIXME: Check validity of the parameter given to V !
                 bDelayedExpansion = _tcsnicmp(&ptr[2], _T(":OFF"), 4);
+            }
+            else if (option == _T('E'))
+            {
+                // FIXME: Check validity of the parameter given to E !
+                bEnableExtensions = _tcsnicmp(&ptr[2], _T(":OFF"), 4);
+            }
+            else if (option == _T('X'))
+            {
+                /* '/X' is identical to '/E:ON' */
+                bEnableExtensions = TRUE;
+            }
+            else if (option == _T('Y'))
+            {
+                /* '/Y' is identical to '/E:OFF' */
+                bEnableExtensions = FALSE;
             }
         }
     }
+
+#ifdef INCLUDE_CMD_COLOR
+    if (wDefColor == 0)
+    {
+        /*
+         * If we still do not have the console colour attribute set,
+         * retrieve the default one.
+         */
+        ConGetDefaultAttributes(&wDefColor);
+    }
+
+    if (wDefColor != 0)
+        ConSetScreenColor(ConStreamGetOSHandle(StdOut), wDefColor, TRUE);
+#endif
+
+    /* Reset the output Standard Streams translation modes and codepage caches */
+    // ConStreamSetMode(StdIn , OutputStreamMode, InputCodePage );
+    ConStreamSetMode(StdOut, OutputStreamMode, OutputCodePage);
+    ConStreamSetMode(StdErr, OutputStreamMode, OutputCodePage);
 
     if (!*ptr)
     {
@@ -1779,40 +1994,39 @@ Initialize()
 }
 
 
-static VOID Cleanup()
+static VOID Cleanup(VOID)
 {
-    /* run cmdexit.bat */
-    if (IsExistingFile (_T("cmdexit.bat")))
+    /* Run cmdexit.bat */
+    if (IsExistingFile(_T("cmdexit.bat")))
     {
         ConErrResPuts(STRING_CMD_ERROR5);
-
-        ParseCommandLine (_T("cmdexit.bat"));
+        ParseCommandLine(_T("cmdexit.bat"));
     }
-    else if (IsExistingFile (_T("\\cmdexit.bat")))
+    else if (IsExistingFile(_T("\\cmdexit.bat")))
     {
-        ConErrResPuts (STRING_CMD_ERROR5);
-        ParseCommandLine (_T("\\cmdexit.bat"));
+        ConErrResPuts(STRING_CMD_ERROR5);
+        ParseCommandLine(_T("\\cmdexit.bat"));
     }
 
 #ifdef FEATURE_DIRECTORY_STACK
-    /* destroy directory stack */
-    DestroyDirectoryStack ();
+    /* Destroy directory stack */
+    DestroyDirectoryStack();
 #endif
 
 #ifdef FEATURE_HISTORY
     CleanHistory();
 #endif
 
-    /* free GetEnvVar's buffer */
+    /* Free GetEnvVar's buffer */
     GetEnvVar(NULL);
 
     /* Remove ctrl break handler */
     RemoveBreakHandler();
 
     /* Restore the default console mode */
-    SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE),
+    SetConsoleMode(ConStreamGetOSHandle(StdIn),
                    ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
-    SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE),
+    SetConsoleMode(ConStreamGetOSHandle(StdOut),
                    ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT);
 
     DeleteCriticalSection(&ChildProcessRunningLock);
@@ -1823,52 +2037,38 @@ static VOID Cleanup()
  */
 int _tmain(int argc, const TCHAR *argv[])
 {
-    HANDLE hConsole;
     TCHAR startPath[MAX_PATH];
-    CONSOLE_SCREEN_BUFFER_INFO Info;
 
     InitializeCriticalSection(&ChildProcessRunningLock);
     lpOriginalEnvironment = DuplicateEnvironment();
 
-    GetCurrentDirectory(MAX_PATH,startPath);
+    GetCurrentDirectory(ARRAYSIZE(startPath), startPath);
     _tchdir(startPath);
 
     SetFileApisToOEM();
-    InputCodePage = 0;
-    OutputCodePage = 0;
-
-    hConsole = CreateFile(_T("CONOUT$"), GENERIC_READ|GENERIC_WRITE,
-                          FILE_SHARE_READ|FILE_SHARE_WRITE, NULL,
-                          OPEN_EXISTING, 0, NULL);
-    if (hConsole != INVALID_HANDLE_VALUE)
-    {
-        if (!GetConsoleScreenBufferInfo(hConsole, &Info))
-        {
-            ConErrFormatMessage(GetLastError());
-            CloseHandle(hConsole);
-            return(1);
-        }
-        wDefColor = Info.wAttributes;
-        CloseHandle(hConsole);
-    }
-
-    InputCodePage = GetConsoleCP();
+    InputCodePage  = GetConsoleCP();
     OutputCodePage = GetConsoleOutputCP();
+
+    /* Initialize the Console Standard Streams */
+    ConStreamInit(StdIn , GetStdHandle(STD_INPUT_HANDLE) , /*OutputStreamMode*/ AnsiText, InputCodePage);
+    ConStreamInit(StdOut, GetStdHandle(STD_OUTPUT_HANDLE), OutputStreamMode, OutputCodePage);
+    ConStreamInit(StdErr, GetStdHandle(STD_ERROR_HANDLE) , OutputStreamMode, OutputCodePage);
+
     CMD_ModuleHandle = GetModuleHandle(NULL);
 
-    /* check switches on command-line */
+    /* Perform general initialization, parse switches on command-line */
     Initialize();
 
-    /* call prompt routine */
+    /* Call prompt routine */
     ProcessInput();
 
-    /* do the cleanup */
+    /* Do the cleanup */
     Cleanup();
 
     cmd_free(lpOriginalEnvironment);
 
     cmd_exit(nErrorLevel);
-    return(nErrorLevel);
+    return nErrorLevel;
 }
 
 /* EOF */

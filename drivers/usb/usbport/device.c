@@ -1,3 +1,10 @@
+/*
+ * PROJECT:     ReactOS USB Port Driver
+ * LICENSE:     GPL-2.0+ (https://spdx.org/licenses/GPL-2.0+)
+ * PURPOSE:     USBPort device functions
+ * COPYRIGHT:   Copyright 2017 Vadim Galyant <vgal@rambler.ru>
+ */
+
 #include "usbport.h"
 
 #define NDEBUG
@@ -249,7 +256,7 @@ USBPORT_OpenInterface(IN PURB Urb,
     PUSBPORT_PIPE_HANDLE PipeHandle;
     PUSB_ENDPOINT_DESCRIPTOR Descriptor;
     PUSBD_PIPE_INFORMATION PipeInfo;
-    ULONG NumInterfaces;
+    ULONG NumEndpoints;
     SIZE_T Length;
     SIZE_T HandleLength;
     BOOLEAN IsAllocated = FALSE;
@@ -266,10 +273,10 @@ USBPORT_OpenInterface(IN PURB Urb,
                                                                InterfaceInfo->AlternateSetting,
                                                                &InterfaceInfo->AlternateSetting);
 
-    NumInterfaces = InterfaceDescriptor->bNumEndpoints;
+    NumEndpoints = InterfaceDescriptor->bNumEndpoints;
 
     Length = sizeof(USBD_INTERFACE_INFORMATION) +
-             (NumInterfaces - 1) * sizeof(USBD_PIPE_INFORMATION);
+             (NumEndpoints - 1) * sizeof(USBD_PIPE_INFORMATION);
 
     if (InterfaceInfo->AlternateSetting && IsSetInterface)
     {
@@ -283,7 +290,7 @@ USBPORT_OpenInterface(IN PURB Urb,
     else
     {
         HandleLength = sizeof(USBPORT_INTERFACE_HANDLE) +
-                       (NumInterfaces - 1) * sizeof(USBPORT_PIPE_HANDLE);
+                       (NumEndpoints - 1) * sizeof(USBPORT_PIPE_HANDLE);
 
         InterfaceHandle = ExAllocatePoolWithTag(NonPagedPool,
                                                 HandleLength,
@@ -297,17 +304,12 @@ USBPORT_OpenInterface(IN PURB Urb,
 
         RtlZeroMemory(InterfaceHandle, HandleLength);
 
-        if (NumInterfaces > 0)
+        for (ix = 0; ix < NumEndpoints; ++ix)
         {
-            PipeHandle = &InterfaceHandle->PipeHandle[0];
+            PipeHandle = &InterfaceHandle->PipeHandle[ix];
 
-            for (ix = 0; ix < NumInterfaces; ++ix)
-            {
-                PipeHandle->Flags = PIPE_HANDLE_FLAG_CLOSED;
-                PipeHandle->Endpoint = NULL;
-
-                PipeHandle += 1;
-            }
+            PipeHandle->Flags = PIPE_HANDLE_FLAG_CLOSED;
+            PipeHandle->Endpoint = NULL;
         }
 
         IsAllocated = TRUE;
@@ -328,79 +330,71 @@ USBPORT_OpenInterface(IN PURB Urb,
     Descriptor = (PUSB_ENDPOINT_DESCRIPTOR)((ULONG_PTR)InterfaceDescriptor +
                                             InterfaceDescriptor->bLength);
 
-    if (NumInterfaces)
+    for (ix = 0; ix < NumEndpoints; ++ix)
     {
-        PipeHandle = &InterfaceHandle->PipeHandle[0];
+        PipeHandle = &InterfaceHandle->PipeHandle[ix];
 
-        for (ix = 0; ix < NumInterfaces; ++ix)
+        while (Descriptor->bDescriptorType != USB_ENDPOINT_DESCRIPTOR_TYPE)
         {
-            while (Descriptor->bDescriptorType != USB_ENDPOINT_DESCRIPTOR_TYPE)
+            if (Descriptor->bLength == 0)
             {
-                if (Descriptor->bLength == 0)
-                {
-                    break;
-                }
-                else
-                {
-                    Descriptor = (PUSB_ENDPOINT_DESCRIPTOR)((ULONG_PTR)Descriptor +
-                                                            Descriptor->bLength);
-                }
+                break;
             }
-
-            if (InterfaceInfo->Pipes[ix].PipeFlags & USBD_PF_CHANGE_MAX_PACKET)
+            else
             {
-                Descriptor->wMaxPacketSize = InterfaceInfo->Pipes[ix].MaximumPacketSize;
+                Descriptor = (PUSB_ENDPOINT_DESCRIPTOR)((ULONG_PTR)Descriptor +
+                                                        Descriptor->bLength);
             }
-
-            RtlCopyMemory(&PipeHandle->EndpointDescriptor,
-                          Descriptor,
-                          sizeof(USB_ENDPOINT_DESCRIPTOR));
-
-            PipeHandle->Flags = PIPE_HANDLE_FLAG_CLOSED;
-            PipeHandle->PipeFlags = InterfaceInfo->Pipes[ix].PipeFlags;
-            PipeHandle->Endpoint = NULL;
-
-            wMaxPacketSize = Descriptor->wMaxPacketSize;
-
-            /* USB 2.0 Specification, 5.9 High-Speed, High Bandwidth Endpoints */
-            MaxPacketSize = (wMaxPacketSize & 0x7FF) * (((wMaxPacketSize >> 11) & 3) + 1);
-
-            InterfaceInfo->Pipes[ix].EndpointAddress = Descriptor->bEndpointAddress;
-            InterfaceInfo->Pipes[ix].PipeType = Descriptor->bmAttributes & USB_ENDPOINT_TYPE_MASK;
-            InterfaceInfo->Pipes[ix].MaximumPacketSize = MaxPacketSize;
-            InterfaceInfo->Pipes[ix].PipeHandle = (USBD_PIPE_HANDLE)-1;
-            InterfaceInfo->Pipes[ix].Interval = Descriptor->bInterval;
-
-            Descriptor = (PUSB_ENDPOINT_DESCRIPTOR)((ULONG_PTR)Descriptor +
-                                                    Descriptor->bLength);
-
-            PipeHandle += 1;
         }
+
+        if (InterfaceInfo->Pipes[ix].PipeFlags & USBD_PF_CHANGE_MAX_PACKET)
+        {
+            Descriptor->wMaxPacketSize = InterfaceInfo->Pipes[ix].MaximumPacketSize;
+        }
+
+        RtlCopyMemory(&PipeHandle->EndpointDescriptor,
+                      Descriptor,
+                      sizeof(USB_ENDPOINT_DESCRIPTOR));
+
+        PipeHandle->Flags = PIPE_HANDLE_FLAG_CLOSED;
+        PipeHandle->PipeFlags = InterfaceInfo->Pipes[ix].PipeFlags;
+        PipeHandle->Endpoint = NULL;
+
+        wMaxPacketSize = Descriptor->wMaxPacketSize;
+
+        /* USB 2.0 Specification, 5.9 High-Speed, High Bandwidth Endpoints */
+        MaxPacketSize = (wMaxPacketSize & 0x7FF) * (((wMaxPacketSize >> 11) & 3) + 1);
+
+        InterfaceInfo->Pipes[ix].EndpointAddress = Descriptor->bEndpointAddress;
+        InterfaceInfo->Pipes[ix].PipeType = Descriptor->bmAttributes & USB_ENDPOINT_TYPE_MASK;
+        InterfaceInfo->Pipes[ix].MaximumPacketSize = MaxPacketSize;
+        InterfaceInfo->Pipes[ix].PipeHandle = (USBD_PIPE_HANDLE)-1;
+        InterfaceInfo->Pipes[ix].Interval = Descriptor->bInterval;
+
+        Descriptor = (PUSB_ENDPOINT_DESCRIPTOR)((ULONG_PTR)Descriptor +
+                                                Descriptor->bLength);
     }
 
     if (USBD_SUCCESS(USBDStatus))
     {
-        if (NumInterfaces)
+        for (ix = 0; ix < NumEndpoints; ++ix)
         {
-            PipeInfo = &InterfaceInfo->Pipes[0];
-            PipeHandle = &InterfaceHandle->PipeHandle[0];
+            PipeInfo = &InterfaceInfo->Pipes[ix];
+            PipeHandle = &InterfaceHandle->PipeHandle[ix];
 
-            for (ix = 0; ix < NumInterfaces; ++ix)
-            {
-                Status = USBPORT_OpenPipe(FdoDevice,
-                                          DeviceHandle,
-                                          PipeHandle,
-                                          &USBDStatus);
+            Status = USBPORT_OpenPipe(FdoDevice,
+                                      DeviceHandle,
+                                      PipeHandle,
+                                      &USBDStatus);
 
-                if (!NT_SUCCESS(Status))
-                    break;
+            if (!NT_SUCCESS(Status))
+                break;
 
-                PipeInfo->PipeHandle = PipeHandle;
+            PipeInfo->PipeHandle = PipeHandle;
+        }
 
-                PipeHandle += 1;
-                PipeInfo += 1;
-            }
-
+        if (NumEndpoints)
+        {
             USBPORT_USBDStatusToNtStatus(Urb, USBDStatus);
         }
     }
@@ -417,7 +411,7 @@ Exit:
     {
         if (InterfaceHandle)
         {
-            if (NumInterfaces)
+            if (NumEndpoints)
             {
                 DPRINT1("USBPORT_OpenInterface: USBDStatus - %lx\n", USBDStatus);
             }
@@ -840,7 +834,7 @@ USBPORT_DeviceHasTransfers(IN PDEVICE_OBJECT FdoDevice,
 
         PipeHandleList = PipeHandleList->Flink;
 
-        if (!(PipeHandle->Flags & PIPE_HANDLE_FLAG_NULL_PACKET_SIZE) && 
+        if (!(PipeHandle->Flags & PIPE_HANDLE_FLAG_NULL_PACKET_SIZE) &&
             USBPORT_EndpointHasQueuedTransfers(FdoDevice, PipeHandle->Endpoint, NULL))
         {
             return TRUE;

@@ -49,10 +49,6 @@ CD[..|.]\n\n\
 Tastați CD fără argumente pentru a afișa unitatea și directorul curent.\n\
 Tastați CD unitate: pentru a afișa conținutul directorului curent\n\
 al unității specificate.\n"
-    STRING_CHCP_HELP "Afișează sau stabilește numărul codificării curente de pagină.\n\n\
-CHCP [nnn]\n\n\
-  nnn   Numărul codificării de pagină specificat.\n\n\
-Tastați CHCP fără argumente pentru a afișa numărul codificării curente.\n"
     STRING_CHOICE_HELP "Cere utilizatorului să aleagă una din mai multe opțiuni.\n\n\
 CHOICE  [/C[:]opțiuni][/N][/S][/T[:]implicit,nn][text]\n\n\
   /C[:]opțiuni       Specifică tastele permise. Implicit sunt D și N.\n\
@@ -78,9 +74,9 @@ CMD [/[C|K] comandă][/P][/Q][/T:culori]\n\n\
   /T:culori   Stabilește culorile pentru text și fundal\n\
               (a se vedea comanda COLOR).\n"
     STRING_COLOR_HELP1 "Stabilește culorile implicite pentru text și fundal.\n\n\
-COLOR [attr [/-F]] \n\n\
-  attr        Atributele de culoare pentru consolă\n\
-  /-F         Omite umplerea spațiului gol al consolei\n\n\
+COLOR [attr [/-F]]\n\n\
+  attr        Atributele de culoare pentru consolă.\n\
+  /-F         Omite umplerea spațiului gol al consolei.\n\n\
 Există trei moduri de formulare a atributelor de culoare:\n\
 1) nume_englez ON nume_englez\n\
    (sunt suficiente doar primele trei litere per cuvânt)\n\
@@ -120,6 +116,14 @@ COPY [/V][/Y|/-Y][/A|/B] sursă [/A|/B]\n\
   /Y           Suprimă cererile de confimare a spurascrierilor.\n\
   /-Y          Emite cereri de confirmare pentru suprascrieri.\n\n\
 Argumentul /Y poate fi prezent în variabila de mediu COPYCMD.\n"
+    STRING_CTTY_HELP "Changes the standard I/O terminal device to an auxiliary device.\n\n\
+CTTY device\n\n\
+  device    The terminal device you want to use as the new standard I/O device.\n\
+            This name must refer to a valid character device:\n\
+            AUX, COMx (x=1..N), CON, LPTx (x=1..N), PRN, NUL.\n\
+            CON is usually the default standard I/O device.\n\n\
+To return control to the standard console, type: CTTY CON on the auxiliary\n\
+device."
     STRING_DATE_HELP1 "\nIntroduceți o nouă dată (ll%czz%caaaa): "
     STRING_DATE_HELP2 "\nIntroduceți o nouă dată (zz%cll%caaaa): "
     STRING_DATE_HELP3 "\nIntroduceți o nouă dată (aaaa%cll%czz): "
@@ -500,8 +504,6 @@ titlu         Noul titlu.\n"
     STRING_ALIAS_ERROR "Linia de comandă devine prea lungă după extinderea alias!\n"
     STRING_ASSOC_ERROR "Nu poate fi găsită nici o aplicație asociată extensiei «%s»\n"
     STRING_BATCH_ERROR "Eroare la deschiderea fișierului de comenzi\n"
-    STRING_CHCP_ERROR1 "Codificarea curentă a paginilor: %u\n"
-    STRING_CHCP_ERROR4 "Codificare de pagină nevalidă\n"
     STRING_CHOICE_ERROR "Opțiune eronată. Vedeți formatul: /C[:]opțiuni"
     STRING_CHOICE_ERROR_TXT "Opțiune eronată. Vedeți formatul: /T[:]implicit,nn"
     STRING_CHOICE_ERROR_OPTION "Opțiune eronată: %s"
@@ -512,7 +514,6 @@ titlu         Noul titlu.\n"
     STRING_CMD_ERROR5 "«cmdexit.bat» în execuție...\n"
     STRING_COLOR_ERROR1 "Eroare de culoare identică! (Culorile nu trebuie să fie identice)"
     STRING_COLOR_ERROR2 "Eroare la specificarea culorii"
-    STRING_COLOR_ERROR3 "Culoare %02x\n"
     STRING_CONSOLE_ERROR "Eroare necunoscută: %d\n"
     STRING_COPY_ERROR1 "Eroare: Fișierul - «%s» nu a putut fi deschis!\n"
     STRING_COPY_ERROR2 "Eroare: Nu poate fi copiat peste el însuși!\n"

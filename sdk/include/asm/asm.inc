@@ -9,6 +9,13 @@
 #ifndef __ASM_INC__
 #define __ASM_INC__
 
+/* Common definitions for FPO macro
+   see http://msdn.microsoft.com/en-us/library/ms679352%28VS.85%29.aspx */
+#define FRAME_FPO    0
+#define FRAME_TRAP   1
+#define FRAME_TSS    2
+#define FRAME_NONFPO 3
+
 #ifdef _USE_ML
 
 /* Allow ".name" identifiers */
@@ -186,13 +193,34 @@ resb MACRO name, size
     __absolute__address__ = __absolute__address__ + size
 ENDM
 
-
 /* We need this to distinguish repeat from macros */
 #define ENDR ENDM
 
 #define CR 13
 #define LF 10
 #define NUL 0
+
+/* For compatibility with GAS */
+CFI_STARTPROC MACRO start
+ENDM
+CFI_ENDPROC MACRO
+ENDM
+CFI_DEF_CFA MACRO reg:REQ, offset:REQ
+ENDM
+CFI_DEF_CFA_OFFSET MACRO offset:REQ
+ENDM
+CFI_DEF_CFA_REGISTER MACRO reg:REQ
+ENDM
+CFI_ADJUST_CFA_OFFSET MACRO offset:REQ
+ENDM
+CFI_OFFSET MACRO reg:REQ, offset:REQ
+ENDM
+CFI_REGISTER MACRO reg1:REQ, reg2:REQ
+ENDM
+CFI_REL_OFFSET MACRO reg:REQ, offset:REQ
+ENDM
+CFI_SAME_VALUE MACRO reg:REQ
+ENDM
 
 #else /***********************************************************************/
 
@@ -218,7 +246,7 @@ ENDM
 .macro .PROC name
     .func \name
 #ifdef _X86_
-    /* x86 gas expects a label with _ prefix */
+    /* x86 GAS expects a label with _ prefix */
     _\name:
 #endif
     \name:
@@ -284,7 +312,9 @@ ENDM
 /* check http://msdn.microsoft.com/en-us/library/9c9k076y%28VS.80%29.aspx
    and http://msdn.microsoft.com/en-us/library/ms679352%28VS.85%29.aspx */
 .macro FPO cdwLocals, cdwParams, cbProlog, cbRegs, fUseBP, cbFrame
-    /* dummy */
+    .if (cbFrame == FRAME_TRAP)
+        .cfi_signal_frame
+    .endif
 .endm
 
 /* Macros for x64 stack unwind OPs */
@@ -360,17 +390,22 @@ code = 1
 #define else .else
 #define elseif .elseif
 
-#define CR "\r"
-#define LF "\n"
+#define CR  "\r"
+#define LF  "\n"
 #define NUL "\0"
 
-#endif
+/* CFI annotations */
+#define CFI_STARTPROC .cfi_startproc
+#define CFI_ENDPROC .cfi_endproc
+#define CFI_DEF_CFA .cfi_def_cfa
+#define CFI_DEF_CFA_OFFSET .cfi_def_cfa_offset
+#define CFI_DEF_CFA_REGISTER .cfi_def_cfa_register
+#define CFI_ADJUST_CFA_OFFSET .cfi_adjust_cfa_offset
+#define CFI_OFFSET .cfi_offset
+#define CFI_REGISTER .cfi_register
+#define CFI_REL_OFFSET .cfi_rel_offset
+#define CFI_SAME_VALUE .cfi_same_value
 
-/* Common definitions for FPO macro
-   see http://msdn.microsoft.com/en-us/library/ms679352%28VS.85%29.aspx */
-#define FRAME_FPO 0
-#define FRAME_TRAP 1
-#define FRAME_TSS 2
-#define FRAME_NONFPO 3
+#endif
 
 #endif /* __ASM_INC__ */

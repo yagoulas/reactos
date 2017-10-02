@@ -51,10 +51,6 @@ CD[..|.]\n\n\
   /D   Do të ndryshojë drivin aktual dhe dosjen aktuale.\n\n\
 Shkruaj CD drive: për të shfaqur dosjen aktuale në harddiskun e specifikuar.\n\
 Shkruaj CD  pa asnjë parameter për të shfaque harddikun aktual dhe dosjet e tij.\n"
-    STRING_CHCP_HELP "Shfaq ose cakto kodin dhe numrin e faqes aktive.\n\n\
-CHCP [nnn]\n\n\
-  nnn   Specifikon kodin dhe numrin aktiv te faqes.\n\n\
-Shkruaj CHCP pa anjë parameter për të shfaqur kodin dhe numrin e faqes aktive.\n"
     STRING_CHOICE_HELP "Pret për përdoruesit për të zgjedhur një nga një sërë zgjedhjesh.\n\n\
 CHOICE  [/C[:]zgjedhje][/N][/S][/T[:]c,nn][tekst]\n\n\
   /C[:]zgjedhje Përcakton çelësat e lejueshme. Parazgjedhuri është YN.\n\
@@ -79,9 +75,9 @@ CMD [/[C|K] komande][/P][/Q][/T:bf]\n\n\
               (nuk mund të ndërpritet).\n\
   /T:bf       Përcakton ngjyrën e sfondit/parasfondin(shih NGJYRAT e komandave).\n"
     STRING_COLOR_HELP1 "Vë parazgjedhjene e ngjyrave të sfondit dhe parasfondit.\n\n\
-COLOR [attr [/-F]] \n\n\
-  attr        Përcakton atributin e ngjyrave të prodhimit nga konsoli\n\
-  /-F         Nuk e mbush hapësirën bosh të konsolit me atribute ngjyrash\n\n\
+COLOR [attr [/-F]]\n\n\
+  attr        Përcakton atributin e ngjyrave të prodhimit nga konsoli.\n\
+  /-F         Nuk e mbush hapësirën bosh të konsolit me atribute ngjyrash.\n\n\
 Ka tre mënyra për të specifikuar ngjyrat:\n\
 1) [e ndritshem] emri [e ndritshem] emri  (vetëm tre letrat e para janë të nevojshme)\n\
 2) decimal në decimal\n\
@@ -111,6 +107,14 @@ COPY [/V][/Y|/-Y][/A|/B] burimi [/A|/B]\n\
                destinacion dokumenti ekzistues.\n\n\
 Parametri /Y mund të jetë prezent në variabëlat e mjedisit COPYCMD.\n\
 ...\n"
+    STRING_CTTY_HELP "Changes the standard I/O terminal device to an auxiliary device.\n\n\
+CTTY device\n\n\
+  device    The terminal device you want to use as the new standard I/O device.\n\
+            This name must refer to a valid character device:\n\
+            AUX, COMx (x=1..N), CON, LPTx (x=1..N), PRN, NUL.\n\
+            CON is usually the default standard I/O device.\n\n\
+To return control to the standard console, type: CTTY CON on the auxiliary\n\
+device."
     STRING_DATE_HELP1 "\nShkruani datën e re (mm%cdd%cyyyy): "
     STRING_DATE_HELP2 "\nShkruani datën e re (dd%cmm%cyyyy): "
     STRING_DATE_HELP3 "\nShkruani datën e re (yyyy%cmm%cdd): "
@@ -142,10 +146,10 @@ ERASE [/N /P /T /Q /S /W /Y /Z /A[[:]attributes]] file ...\n\n\
     STRING_DEL_HELP2 "Të gjitha dokumentet në skedare do të fshihen!\nJeni i sigurtë (P/J)?"
     STRING_DEL_HELP3 "    %lu u fshi\n"
     STRING_DEL_HELP4 "    %lu u fshinë\n"
-    STRING_DELAY_HELP "pauzë për sekonda ose milisekonda\n\
+    STRING_DELAY_HELP "Pauzë për sekonda ose milisekonda.\n\
 DELAY [/m]n\n\n\
-  /m          specifikoni se n janë millisekonda\n\
-              ndryshe n janë sekonda\n"
+  /m          Specifikoni se n janë millisekonda\n\
+              ndryshe n janë sekonda.\n"
     STRING_DIR_HELP1 "DIR [drive:][rrugë][emer] [/A[[:]attributes]] [/B] [/C] [/D] [/L] [/N]\n\
   [/O[[:]radhitje]] [/P] [/Q] [/R] [/S] [/T[[:]koha]] [/W] [/X] [/4]\n\n\
   [drive:][rrugë][emer]\n\
@@ -473,8 +477,6 @@ title         titull i ri\n"
     STRING_ALIAS_ERROR "Rreshti i komandës shumë gjatë pas pseudonimit!\n"
     STRING_ASSOC_ERROR "Dokumentit perkates nuk u gjet për zgjatjen %s\n"
     STRING_BATCH_ERROR "Gabim gjatë hapjes së dokumentit batch\n"
-    STRING_CHCP_ERROR1 "Faqja Active e Kodit: %u\n"
-    STRING_CHCP_ERROR4 "Invalid code page\n"
     STRING_CHOICE_ERROR "Opsione invalide. Format i pritshem: /C[:]opsione"
     STRING_CHOICE_ERROR_TXT "Opsione invalide. Format i pritshem: /T[:]c,nn"
     STRING_CHOICE_ERROR_OPTION "Illegal Option: %s"
@@ -484,8 +486,7 @@ title         titull i ri\n"
     STRING_CMD_ERROR4 "Fillo %s...\n"
     STRING_CMD_ERROR5 "Fillo cmdexit.bat...\n"
     STRING_COLOR_ERROR1 "Error i njëta ngjyra! (Historiku dhe prioritetit nuk mund të jetë ngjyrë të njëjtë)"
-    STRING_COLOR_ERROR2 "gabim në specifikim ngjyra"
-    STRING_COLOR_ERROR3 "Ngjyra %02x\n"
+    STRING_COLOR_ERROR2 "Gabim në specifikim ngjyra"
     STRING_CONSOLE_ERROR "Error i paditur: %d\n"
     STRING_COPY_ERROR1 "Error: Nuk mund të hapni burim - %s!\n"
     STRING_COPY_ERROR2 "Error: Nuk mund të kopjoni mbi veten!\n"

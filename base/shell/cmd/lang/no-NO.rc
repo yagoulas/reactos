@@ -47,10 +47,6 @@ CD[..|.]\n\n\
   /D   Vil endre gjeldende stasjon og gjeldende mappe.\n\n\
 Tast CD stasjon: for å vise gjeldende mappe på spesifiserte stasjon.\n\
 Tast CD uten parametere for å vise gjeldende stasjon og mappe.\n"
-    STRING_CHCP_HELP "Viser eller velger aktive tegntabellnummer.\n\n\
-CHCP [nnn]\n\n\
-  nnn   Spesifisere aktive tegntabellnummer.\n\n\
-Skriv CHCP uten parametrer for å vise aktiv tegntabellnummer.\n"
     STRING_CHOICE_HELP "Venter på at bruker skal velge ett av alternativene.\n\n\
 CHOICE  [/C[:]valg][/N][/S][/T[:]c,nn][tekst]\n\n\
   /C[:]Valg  Spesifisere tillatte nøkler. Standard er JN.\n\
@@ -75,9 +71,9 @@ CMD [/[C|K] kommando][/P][/Q][/T:bf]\n\n\
               (kan ikke avsluttes).\n\
   /T:bf       Velg bakgrunn/forgrunn farge (se COLOR kommando).\n"
     STRING_COLOR_HELP1 "Velg standard forgrunns- og bakgrunnsfarger.\n\n\
-COLOR [attr [/-F]] \n\n\
-  attr        Spesifisere fargeattributter for konsollteksten\n\
-  /-F         Fyller ikke blank plass med fargeattributter\n\n\
+COLOR [attr [/-F]]\n\n\
+  attr        Spesifisere fargeattributter for konsollteksten.\n\
+  /-F         Fyller ikke blank plass med fargeattributter.\n\n\
 Det er tre nåter å spesifisere fargene:\n\
 1) [bright] navn på [bright] navn  (bare de tre første bokstaver er krevet)\n\
 2) desimal på desimal\n\
@@ -107,6 +103,14 @@ COPY [/V][/Y|/-Y][/A|/B] kilde [/A|/B]\n\
                eksisterende destinasjonsfil.\n\n\
 Bryteren /Y kan eksistere i COPYCMD miljøvariabel.\n\
 ...\n"
+    STRING_CTTY_HELP "Changes the standard I/O terminal device to an auxiliary device.\n\n\
+CTTY device\n\n\
+  device    The terminal device you want to use as the new standard I/O device.\n\
+            This name must refer to a valid character device:\n\
+            AUX, COMx (x=1..N), CON, LPTx (x=1..N), PRN, NUL.\n\
+            CON is usually the default standard I/O device.\n\n\
+To return control to the standard console, type: CTTY CON on the auxiliary\n\
+device."
     STRING_DATE_HELP1 "\nSkriv inn ny dato (mm%cdd%cyyyy): "
     STRING_DATE_HELP2 "\nSkriv inn ny dato (dd%cmm%cyyyy): "
     STRING_DATE_HELP3 "\nSkriv inn ny dato (yyyy%cmm%cdd): "
@@ -138,10 +142,10 @@ ERASE [/N /P /T /Q /S /W /Y /Z /A[[:]attributer]] fil ...\n\n\
     STRING_DEL_HELP2 "Alle filer i mappen vil bli slettet!\nEr du sikker (J/N)?"
     STRING_DEL_HELP3 "    %lu fil slettet\n"
     STRING_DEL_HELP4 "    %lu filer slettet\n"
-    STRING_DELAY_HELP "pause i n sekunder eller mikrosekunder\n\
+    STRING_DELAY_HELP "Pause i n sekunder eller mikrosekunder.\n\
 DELAY [/m]n\n\n\
-  /m          spesifiserer at n er mikrosekunder\n\
-              ellers er n sekunder\n"
+  /m          Spesifiserer at n er mikrosekunder\n\
+              ellers er n sekunder.\n"
     STRING_DIR_HELP1 "DIR [stasjon:][mappe][filnavn] [/A[[:]attributter]] [/B] [/C] [/D] [/L] [/N]\n\
   [/O[[:]sortering]] [/P] [/Q] [/R] [/S] [/T[[:]tidsfelt]] [/W] [/X] [/4]\n\n\
   [stasjon:][mappe][filnavn]\n\
@@ -467,8 +471,6 @@ tittel        ny tittel\n"
     STRING_ALIAS_ERROR "Kommando linje for lang etter alias utvidelse!\n"
     STRING_ASSOC_ERROR "Fil association ble ikke funnet for utvidelsen %s\n"
     STRING_BATCH_ERROR "Feil ved åpning av satsvis fil\n"
-    STRING_CHCP_ERROR1 "Aktiv tegntabell: %u\n"
-    STRING_CHCP_ERROR4 "Ugyldig tegntabell\n"
     STRING_CHOICE_ERROR "Ugyldig  valg. Forventet format: /C[:]valg"
     STRING_CHOICE_ERROR_TXT "Ugyldig  valg. Forventet format: /T[:]c,nn"
     STRING_CHOICE_ERROR_OPTION "Ulovlig operasjon: %s"
@@ -478,8 +480,7 @@ tittel        ny tittel\n"
     STRING_CMD_ERROR4 "Kjører %s...\n"
     STRING_CMD_ERROR5 "Kjører cmdexit.bat...\n"
     STRING_COLOR_ERROR1 "Samme farge feil! (Bakgrunn og forgrunn kan ikke ha samme farge)"
-    STRING_COLOR_ERROR2 "feil i farge spesifikasjon"
-    STRING_COLOR_ERROR3 "Farge %02x\n"
+    STRING_COLOR_ERROR2 "Feil i farge spesifikasjon"
     STRING_CONSOLE_ERROR "Ukjent feil: %d\n"
     STRING_COPY_ERROR1 "Feil: kan ikke åpne kilden - %s!\n"
     STRING_COPY_ERROR2 "Feil: kan ikke kopiere til seg selv!\n"

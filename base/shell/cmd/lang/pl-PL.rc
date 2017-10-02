@@ -56,10 +56,6 @@ CD[..|.]\n\n\
   /D   Umożliwia zmianę napędu.\n\n\
 Wpisz CD [napęd:], by wyświetlić bieżący katalog na danym napędzie.\n\
 Wpisz CD bez żadnych parametrów, by wyświetlić bieżący napęd i katalog.\n"
-    STRING_CHCP_HELP "Wyświetla lub ustawia numer aktywnej strony kodowej.\n\n\
-CHCP [nnn]\n\n\
-  nnn   Numer strony kodowej.\n\n\
-Wpisz CHCP bez parametru, by wyświetlić numer aktywnej strony kodowej.\n"
     STRING_CHOICE_HELP "Wyświetla opcje jakimi dysponuje użytkownik i oczekuje na wybór jednej z nich.\n\n\
 CHOICE  [/C[:]opcje][/N][/S][/T[:]c,nn][tekst]\n\n\
   /C[:]opcje  Wyznacza klawisze wyświetlane jako wybór. Domyślne: TN.\n\
@@ -84,9 +80,9 @@ CMD [/[C|K] komenda][/P][/Q][/T:bf]\n\n\
               (okno nie może zostać zamknięte).\n\
   /T:bf       Ustawia kolor tła/tekstu (patrz komenda COLOR).\n"
     STRING_COLOR_HELP1 "Ustawia domyślny kolor tła i tekstu.\n\n\
-COLOR [atr [/-F]] \n\n\
-  atr        Ustawienia koloru \n\
-  /-F        Nie uzupełnia kolorem pustych przestrzeni w konsoli\n\n\
+COLOR [atr [/-F]]\n\n\
+  atr        Ustawienia koloru.\n\
+  /-F        Nie uzupełnia kolorem pustych przestrzeni w konsoli.\n\n\
 Ustawienia koloru można wyznaczyć na trzy sposoby:\n\
 1) [jasny] nazwa on [jasny] nazwa  (wystarczą pierwsze trzy litery nazwy)\n\
 2) numer_dec on numer_dec\n\
@@ -116,6 +112,14 @@ COPY [/V][/Y|/-Y][/A|/B] źródło [/A|/B]\n\
                istniejącego pliku.\n\n\
 Opcja /Y może znaleźć się wśród zmiennych środowiskowych COPYCMD.\n\
 ...\n"
+    STRING_CTTY_HELP "Changes the standard I/O terminal device to an auxiliary device.\n\n\
+CTTY device\n\n\
+  device    The terminal device you want to use as the new standard I/O device.\n\
+            This name must refer to a valid character device:\n\
+            AUX, COMx (x=1..N), CON, LPTx (x=1..N), PRN, NUL.\n\
+            CON is usually the default standard I/O device.\n\n\
+To return control to the standard console, type: CTTY CON on the auxiliary\n\
+device."
     STRING_DATE_HELP1 "\nPodaj nową datę (mm%cdd%crrrr): "
     STRING_DATE_HELP2 "\nPodaj nową datę (dd%cmm%crrrr): "
     STRING_DATE_HELP3 "\nPodaj nową datę (rrrr%cmm%cdd): "
@@ -146,10 +150,10 @@ ERASE [/N /P /T /Q /S /W /Y /Z /A[[:]attributy]] plik ...\n\n\
     STRING_DEL_HELP2 "Wszystkie pliki w tym katalogu zostaną skasowane!\nCzy jesteś pewien (T/N)?"
     STRING_DEL_HELP3 "    %lu plik skasowany\n"
     STRING_DEL_HELP4 "    %lu pliki(-ów) skasowane(-ych)\n"
-    STRING_DELAY_HELP "Pauzuje na n sekund lub milisekund\n\
+    STRING_DELAY_HELP "Pauzuje na n sekund lub milisekund.\n\
 DELAY [/m]n\n\n\
-  /m          wymusza traktowanie n jako milisekund,\n\
-              w innym wypadku będzie traktowane jako sekundy\n"
+  /m          Wymusza traktowanie n jako milisekund,\n\
+              w innym wypadku będzie traktowane jako sekundy.\n"
     STRING_DIR_HELP1 "DIR [napęd:][ścieżka][pliki] [/A[[:]atrybuty]] [/B] [/C] [/D] [/L] [/N]\n\
   [/O[[:]porządek]] [/P] [/Q] [/R] [/S] [/T[[:]czas]] [/W] [/X] [/4]\n\n\
   [napęd:][ścieżka][nazwa_pliku]\n\
@@ -473,8 +477,6 @@ title         nowy tytuł okna\n"
     STRING_ALIAS_ERROR "Linia poleceń zbyt długa po rozszerzeniu aliasa!\n"
     STRING_ASSOC_ERROR "File association not found for extension %s\n"
     STRING_BATCH_ERROR "Błąd podczas otwierania pliku wsadowego\n"
-    STRING_CHCP_ERROR1 "Aktywna strona kodowa nr: %u\n"
-    STRING_CHCP_ERROR4 "Niewłaściwy numer strony kodowej\n"
     STRING_CHOICE_ERROR "Parametr niepoprawny. Poprawna forma: /C[:]opcja"
     STRING_CHOICE_ERROR_TXT "Parametr niepoprawny. Poprawna forma: /T[:]c,nn"
     STRING_CHOICE_ERROR_OPTION "Zły parametr: %s"
@@ -485,7 +487,6 @@ title         nowy tytuł okna\n"
     STRING_CMD_ERROR5 "Wykonywanie cmdexit.bat...\n"
     STRING_COLOR_ERROR1 "Błąd! Kolor tła i tekstu nie może być taki sam"
     STRING_COLOR_ERROR2 "Błąd w oznaczeniu kolorów."
-    STRING_COLOR_ERROR3 "Kolor %02x\n"
     STRING_CONSOLE_ERROR "Nieznany błąd: %d\n"
     STRING_COPY_ERROR1 "Błąd: Nie można otworzyć źródła - %s!\n"
     STRING_COPY_ERROR2 "Błąd: Nie można przekopiować pliku na niego samego!\n"

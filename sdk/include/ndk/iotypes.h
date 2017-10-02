@@ -314,6 +314,25 @@ typedef enum _FILE_INFORMATION_CLASS
     FileIdFullDirectoryInformation,
     FileValidDataLengthInformation,
     FileShortNameInformation,
+#if (NTDDI_VERSION >= NTDDI_VISTA)
+    FileIoCompletionNotificationInformation,
+    FileIoStatusBlockRangeInformation,
+    FileIoPriorityHintInformation,
+    FileSfioReserveInformation,
+    FileSfioVolumeInformation,
+    FileHardLinkInformation,
+    FileProcessIdsUsingFileInformation,
+    FileNormalizedNameInformation,
+    FileNetworkPhysicalNameInformation,
+#endif
+#if (NTDDI_VERSION >= NTDDI_WIN7)
+    FileIdGlobalTxDirectoryInformation,
+    FileIsRemoteDeviceInformation,
+    FileUnusedInformation,
+    FileNumaNodeInformation,
+    FileStandardLinkInformation,
+    FileRemoteProtocolInformation,
+#endif
     FileMaximumInformation
 } FILE_INFORMATION_CLASS, *PFILE_INFORMATION_CLASS;
 
@@ -437,6 +456,11 @@ typedef struct _FILE_EA_INFORMATION
 {
     ULONG EaSize;
 } FILE_EA_INFORMATION, *PFILE_EA_INFORMATION;
+
+typedef struct _FILE_ACCESS_INFORMATION
+{
+    ACCESS_MASK AccessFlags;
+} FILE_ACCESS_INFORMATION, *PFILE_ACCESS_INFORMATION;
 
 typedef struct _FILE_COMPRESSION_INFORMATION
 {
@@ -1289,6 +1313,38 @@ typedef VOID
     CTL_CODE(FILE_DEVICE_TAPE, 9, METHOD_BUFFERED, FILE_READ_ACCESS)
 #define IOCTL_TAPE_CREATE_PARTITION     \
     CTL_CODE(FILE_DEVICE_TAPE, 10, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
+//
+// Reparse points
+//
+
+#define SYMLINK_FLAG_RELATIVE   1
+
+typedef struct _REPARSE_DATA_BUFFER {
+  ULONG ReparseTag;
+  USHORT ReparseDataLength;
+  USHORT Reserved;
+  _ANONYMOUS_UNION union {
+    struct {
+      USHORT SubstituteNameOffset;
+      USHORT SubstituteNameLength;
+      USHORT PrintNameOffset;
+      USHORT PrintNameLength;
+      ULONG Flags;
+      WCHAR PathBuffer[1];
+    } SymbolicLinkReparseBuffer;
+    struct {
+      USHORT SubstituteNameOffset;
+      USHORT SubstituteNameLength;
+      USHORT PrintNameOffset;
+      USHORT PrintNameLength;
+      WCHAR PathBuffer[1];
+    } MountPointReparseBuffer;
+    struct {
+      UCHAR DataBuffer[1];
+    } GenericReparseBuffer;
+  } DUMMYUNIONNAME;
+} REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
 
 #endif // NTOS_MODE_USER
 

@@ -363,7 +363,7 @@ GetDIBits(
     UINT cjBmpScanSize;
     UINT cjInfoSize;
 
-    if (!hDC || !GdiIsHandleValid((HGDIOBJ) hDC) || !lpbmi)
+    if (!hDC || !GdiValidateHandle((HGDIOBJ) hDC) || !lpbmi)
     {
         GdiSetLastError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -436,7 +436,7 @@ CreateDIBitmap(
         /* CBM_CREATDIB needs Data. */
         if (pbmiConverted == NULL)
         {
-            DPRINT1("CBM_CREATDIB needs a BITMAINFO!\n");
+            DPRINT1("CBM_CREATDIB needs a BITMAPINFO!\n");
             goto Exit;
         }
 

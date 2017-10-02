@@ -90,9 +90,9 @@ cmdAccounts(
             value = wcstoul(p, &endptr, 10);
             if (*endptr != 0)
             {
-                    ConResPrintf(StdErr, IDS_ERROR_INVALID_OPTION_VALUE, L"/MINPWLEN");
-                    result = 1;
-                    goto done;
+                ConResPrintf(StdErr, IDS_ERROR_INVALID_OPTION_VALUE, L"/MINPWLEN");
+                result = 1;
+                goto done;
             }
 
             Info0->usrmod0_min_passwd_len = value;
@@ -151,7 +151,7 @@ cmdAccounts(
         }
     }
 
-    if (Modified == TRUE)
+    if (Modified != FALSE)
     {
         Status = NetUserModalsSet(NULL, 0, (LPBYTE)Info0, &ParamErr);
         if (Status != NERR_Success)

@@ -49,10 +49,6 @@ CD[..|.]\n\n\
   /D   Şimdiki sürücüyü ve şimdiki dizini değiştirecek.\n\n\
 CD sürücü yaz: Belirtilen sürücü üzerinde şimdiki dizini görüntülemek için.\n\
 Şimdiki sürücüyü ve dizini görüntülemek için bir değişken olmadan CD yaz.\n"
-    STRING_CHCP_HELP "Etkin kod sayfası numarasını görüntüler ya da ayarlar.\n\n\
-CHCP [nnn]\n\n\
-  nnn   Etkin kod sayfası numarasını belirtir.\n\n\
-Etkin kod sayfası numarasını görüntülemek için bir değişken olmadan CHCP yaz.\n"
     STRING_CHOICE_HELP "Bir takım seçenekten birini seçmek için kullanıcıyı bekler.\n\n\
 CHOICE  [/C[:]seçenekler][/N][/S][/T[:]c,nn][metin]\n\n\
   /C[:]seçenekler  İzin verilebilir düğmeleri belirtir. Ön tanımlı YN'dir.\n\
@@ -77,7 +73,7 @@ CMD [/[C|K] komut][/P][/Q][/T:aö]\n\n\
               (sonlandırılamaz).\n\
   /T:aö       Arka plan/ön plan rengini ayarlar (COLOR komutuna bakınız).\n"
     STRING_COLOR_HELP1 "Ön tanımlı ön plan ve arka plan renklerini ayarlar.\n\n\
-COLOR [öznt [/-F]] \n\n\
+COLOR [öznt [/-F]]\n\n\
   öznt        Konsol çıktısının renk öz niteliğini belirtir.\n\
   /-F         Konsol boş alanı renk öz niteliğiyle doldurma.\n\n\
 Renkleri belirtmek için üç yol var:\n\
@@ -109,6 +105,14 @@ COPY [/V][/Y|/-Y][/A|/B] kaynak [/A|/B]\n\
                onaylamak için sormaya neden olur.\n\n\
 /Y seçeneği COPYCMD ortam değişkeninin içinde olabilir.\n\
 ...\n"
+    STRING_CTTY_HELP "Changes the standard I/O terminal device to an auxiliary device.\n\n\
+CTTY device\n\n\
+  device    The terminal device you want to use as the new standard I/O device.\n\
+            This name must refer to a valid character device:\n\
+            AUX, COMx (x=1..N), CON, LPTx (x=1..N), PRN, NUL.\n\
+            CON is usually the default standard I/O device.\n\n\
+To return control to the standard console, type: CTTY CON on the auxiliary\n\
+device."
     STRING_DATE_HELP1 "\nYeni târihi giriniz (mm%cdd%cyyyy): "
     STRING_DATE_HELP2 "\nYeni târihi giriniz (dd%cmm%cyyyy): "
     STRING_DATE_HELP3 "\nYeni târihi giriniz (yyyy%cmm%cdd): "
@@ -141,10 +145,10 @@ ERASE [/N /P /T /Q /S /W /Y /Z /A[[:]öz nitelikler]] kütük ...\n\n\
     STRING_DEL_HELP2 "Dizindeki tüm kütükler silinecek!\nEmin misiniz (Y/N)?"
     STRING_DEL_HELP3 "    %lu kütük silindi\n"
     STRING_DEL_HELP4 "    %lu kütük silindi\n"
-    STRING_DELAY_HELP "n sâniye ya da milisâniye duraklat\n\
+    STRING_DELAY_HELP "n sâniye ya da milisâniye duraklat.\n\
 DELAY [/m]n\n\n\
   /m          n milisâniye olarak belirtir\n\
-              yoksa n sâniyedir\n"
+              yoksa n sâniyedir.\n"
     STRING_DIR_HELP1 "DIR [sürücü:][yol][kütük adı] [/A[[:]öz nitelikler]] [/B] [/C] [/D] [/L] [/N]\n\
   [/O[[:]dizme düzeni]] [/P] [/Q] [/R] [/S] [/T[[:]zaman aralığı]] [/W] [/X] [/4]\n\n\
   [sürücü:][yol][kütük adı]\n\
@@ -474,8 +478,6 @@ başlık        Yeni başlık\n"
     STRING_ALIAS_ERROR "Başka ad açılımından sonra komut yatacı çok uzun!\n"
     STRING_ASSOC_ERROR "%s uzantısı için kütük ilişkilendirmesi bulunamadı.\n"
     STRING_BATCH_ERROR "Toplu iş kütüğünü açma yanlışlığı\n"
-    STRING_CHCP_ERROR1 "Etkin kod sayfası: %u\n"
-    STRING_CHCP_ERROR4 "Geçersiz kod sayfası\n"
     STRING_CHOICE_ERROR "Geçersiz seçenek. Beklenen biçim: /C[:]seçenekler"
     STRING_CHOICE_ERROR_TXT "Geçersiz seçenek. Beklenen biçim: /T[:]c,nn"
     STRING_CHOICE_ERROR_OPTION "Geçersiz seçenek: %s"
@@ -486,7 +488,6 @@ başlık        Yeni başlık\n"
     STRING_CMD_ERROR5 "cmdexit.bat çalıştırılıyor...\n"
     STRING_COLOR_ERROR1 "Aynı renk yanlışlığı! (Arka plan ve ön plan aynı renk olamaz.)"
     STRING_COLOR_ERROR2 "Renk belirtmede yanlışlık"
-    STRING_COLOR_ERROR3 "Renk %02x\n"
     STRING_CONSOLE_ERROR "Bilinmeyen yanlışlık: %d\n"
     STRING_COPY_ERROR1 "Yanlışlık: %s kaynağı açılamıyor!\n"
     STRING_COPY_ERROR2 "Yanlışlık: Kendisinin üstüne çoğaltılamıyor!\n"

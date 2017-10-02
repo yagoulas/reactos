@@ -149,7 +149,7 @@
 @ stdcall NetFileGetInfo(wstr long long ptr)
 @ stdcall NetGetAnyDCName(wstr wstr ptr)
 @ stdcall NetGetDCName(wstr wstr ptr)
-@ stub NetGetDisplayInformationIndex
+@ stdcall NetGetDisplayInformationIndex(wstr long wstr ptr)
 @ stdcall NetGetJoinInformation(wstr ptr ptr)
 @ stdcall NetGetJoinableOUs(wstr wstr wstr wstr ptr ptr)
 @ stdcall NetGroupAdd(wstr long ptr ptr)
@@ -174,7 +174,7 @@
 @ stdcall NetLocalGroupSetInfo(wstr wstr long ptr ptr)
 @ stdcall NetLocalGroupSetMembers(wstr wstr long ptr long)
 @ stub NetLogonGetTimeServiceParentDomain
-@ stub NetLogonSetServiceBits
+@ stdcall NetLogonSetServiceBits(wstr long long)
 @ stdcall NetMessageBufferSend(wstr wstr wstr ptr long)
 @ stdcall NetMessageNameAdd(wstr wstr)
 @ stdcall NetMessageNameDel(wstr wstr)

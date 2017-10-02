@@ -43,7 +43,7 @@
 
 typedef struct _USBPORT_RESOURCES {
   ULONG ResourcesTypes;
-  ULONG HcFlavor;
+  USB_CONTROLLER_FLAVOR HcFlavor;
   ULONG InterruptVector;
   KIRQL InterruptLevel;
   UCHAR Padded1[3];
@@ -364,7 +364,7 @@ typedef ULONG
   PVOID,
   PVOID);
 
-typedef ULONG
+typedef VOID
 (NTAPI *PUSBPORT_COMPLETE_TRANSFER)(
   PVOID,
   PVOID,
@@ -581,6 +581,8 @@ typedef struct _USBPORT_MINIPORT_INTERFACE {
 C_ASSERT(sizeof(USBPORT_MINIPORT_INTERFACE) == 32 + 76 * sizeof(PVOID));
 
 #define USBPORT_TRANSFER_DIRECTION_OUT  1 // From host to device
+#define USBPORT_MAX_DEVICE_ADDRESS      127
+
 typedef struct _USBPORT_ENDPOINT_PROPERTIES {
   USHORT DeviceAddress;
   USHORT EndpointAddress;
@@ -624,16 +626,16 @@ typedef struct _USBPORT_SCATTER_GATHER_LIST {
   ULONG_PTR CurrentVa;
   PVOID MappedSystemVa;
   ULONG SgElementCount;
-  USBPORT_SCATTER_GATHER_ELEMENT SgElement[1];
+  USBPORT_SCATTER_GATHER_ELEMENT SgElement[2];
 } USBPORT_SCATTER_GATHER_LIST, *PUSBPORT_SCATTER_GATHER_LIST;
 
-C_ASSERT(sizeof(USBPORT_SCATTER_GATHER_LIST) == 24 + 4 * sizeof(PVOID));
+C_ASSERT(sizeof(USBPORT_SCATTER_GATHER_LIST) == 48 + 4 * sizeof(PVOID));
 
 typedef struct _USBPORT_TRANSFER_PARAMETERS {
   ULONG TransferFlags;
   ULONG TransferBufferLength;
   ULONG TransferCounter;
-  ULONG Reserved1;
+  BOOL IsTransferSplited;
   ULONG Reserved2;
   USB_DEFAULT_PIPE_SETUP_PACKET SetupPacket;
 } USBPORT_TRANSFER_PARAMETERS, *PUSBPORT_TRANSFER_PARAMETERS;

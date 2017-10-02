@@ -47,10 +47,6 @@ CD[..|.]\n\n\
   /D   將會改變當前驅動器和當前目錄。\n\n\
 執行 CD 驅動器: 顯示指定驅動器上的當前目錄。\n\
 不帶參數執行 CD 顯示當前驅動器和目錄。\n"
-    STRING_CHCP_HELP "顯示或設定活動的內碼表。\n\n\
-CHCP [nnn]\n\n\
-  nnn   指定活動的內碼表。\n\n\
-不帶參數執行 CHCP 將會顯示當前活動的內碼表。\n"
     STRING_CHOICE_HELP "等待使用者在一組選項中做出一個選擇。\n\n\
 CHOICE  [/C[:]選項][/N][/S][/T[:]c,nn][文字]\n\n\
   /C[:]選項     指定允許的選項。默認為 YN。\n\
@@ -74,7 +70,7 @@ CMD [/[C|K] 命令][/P][/Q][/T:bf]\n\n\
   /P           永久保留 CMD 並運行 autoexec.bat (無法終止)。\n\
   /T:bf        設定前景/背景顏色 (參見 COLOR 命令)。\n"
     STRING_COLOR_HELP1 "設定默認前景和背景顏色。\n\n\
-COLOR [屬性 [/-F]] \n\n\
+COLOR [屬性 [/-F]]\n\n\
   屬性          指定控制檯輸出的顏色屬性。\n\
   /-F           不要使用顏色填充控制檯的空白區域。\n\n\
 有3種方法指定顏色：\n\
@@ -104,6 +100,14 @@ COPY [/V][/Y|/-Y][/A|/B] 源 [/A|/B]\n\
   /-Y            覆蓋一個已存在的檔案時請求確認。\n\n\
 /Y 開關也可以在 COPYCMD 環境變數中指定。\n\
 ...\n"
+    STRING_CTTY_HELP "Changes the standard I/O terminal device to an auxiliary device.\n\n\
+CTTY device\n\n\
+  device    The terminal device you want to use as the new standard I/O device.\n\
+            This name must refer to a valid character device:\n\
+            AUX, COMx (x=1..N), CON, LPTx (x=1..N), PRN, NUL.\n\
+            CON is usually the default standard I/O device.\n\n\
+To return control to the standard console, type: CTTY CON on the auxiliary\n\
+device."
     STRING_DATE_HELP1 "\n輸入新的日期 (mm%cdd%cyyyy)："
     STRING_DATE_HELP2 "\n輸入新的日期 (dd%cmm%cyyyy)："
     STRING_DATE_HELP3 "\n輸入新的日期 (yyyy%cmm%cdd)："
@@ -438,8 +442,6 @@ RESTORE       恢復視窗\n\
     STRING_ALIAS_ERROR "別名展開後的命令列太長！\n"
     STRING_ASSOC_ERROR "副檔名 %s 的檔案關聯未找到！\n"
     STRING_BATCH_ERROR "開啟批處理檔案時出錯\n"
-    STRING_CHCP_ERROR1 "活動內碼表：%u\n"
-    STRING_CHCP_ERROR4 "無效內碼表\n"
     STRING_CHOICE_ERROR "無效選項。期望的格式：/C[:]選項"
     STRING_CHOICE_ERROR_TXT "無效選項。期望的格式：/T[:]c,nn"
     STRING_CHOICE_ERROR_OPTION "非法選項：%s"
@@ -450,7 +452,6 @@ RESTORE       恢復視窗\n\
     STRING_CMD_ERROR5 "正在運行 cmdexit.bat...\n"
     STRING_COLOR_ERROR1 "同樣顏色錯誤！ (背景和前景不能同色)"
     STRING_COLOR_ERROR2 "顏色指定錯誤"
-    STRING_COLOR_ERROR3 "顏色 %02x\n"
     STRING_CONSOLE_ERROR "未知錯誤：%d\n"
     STRING_COPY_ERROR1 "錯誤：無法開啟源 -  %s！\n"
     STRING_COPY_ERROR2 "錯誤：無法複製到自身！\n"

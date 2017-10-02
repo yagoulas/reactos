@@ -49,10 +49,6 @@ CD[..|.]\n\n\
   /D   Cambiara la unidad y el directorio actual.\n\n\
 Escribe CD unidad: para mostrar el directorio actual en la unidad especificada.\n\
 Escribe CD sin ningun parámetro para mostrar la unidad y el directorio actual.\n"
-    STRING_CHCP_HELP "Muestra o configura el número de página de código activa.\n\n\
-CHCP [nnn]\n\n\
-  nnn   Especifica el número de página de código activa.\n\n\
-Escribe CHCP sin ningún parámetro para mostrar el código de página activo.\n"
     STRING_CHOICE_HELP "Espera a que el usuario elija entre un número de opciones.\n\n\
 CHOICE  [/C[:]choices][/N][/S][/T[:]c,nn][text]\n\n\
   /C[:]choices  Especifica las teclas admitidas. Por defecto son SN.\n\
@@ -77,7 +73,7 @@ CMD [/[C|K] command][/P][/Q][/T:bf]\n\n\
               (no puede ser cerrado).\n\
   /T:bf       Configura el color de fondo/primer plano (mirar el comando COLOR).\n"
     STRING_COLOR_HELP1 "Configura el color de primer plano y fondo.\n\n\
-COLOR [attr [/-F]] \n\n\
+COLOR [attr [/-F]]\n\n\
   attr        Especifica el atributo de color de salida de consola.\n\
   /-F         No rellena el espacio en blanco de la consola con el color del atributo.\n\n\
 Hay tres maneras de especificar los colores:\n\
@@ -109,6 +105,14 @@ COPY [/V][/Y|/-Y][/A|/B] origen [/A|/B]\n\
                existente.\n\n\
 El parametro /Y tiene que estar presente en las variables de entorno de COPYCMD.\n\
 ...\n"
+    STRING_CTTY_HELP "Changes the standard I/O terminal device to an auxiliary device.\n\n\
+CTTY device\n\n\
+  device    The terminal device you want to use as the new standard I/O device.\n\
+            This name must refer to a valid character device:\n\
+            AUX, COMx (x=1..N), CON, LPTx (x=1..N), PRN, NUL.\n\
+            CON is usually the default standard I/O device.\n\n\
+To return control to the standard console, type: CTTY CON on the auxiliary\n\
+device."
     STRING_DATE_HELP1 "\nIntroduce la nueva fecha (mm%cdd%cyyyy): "
     STRING_DATE_HELP2 "\nIntroduce la nueva fecha (dd%cmm%cyyyy): "
     STRING_DATE_HELP3 "\nIntroduce la nueva fecha (yyyy%cmm%cdd): "
@@ -140,10 +144,10 @@ ERASE [/N /P /T /Q /S /W /Y /Z /A[[:]atributos]] archivo ...\n\n\
     STRING_DEL_HELP2 "¡Todos los archivos del directorio van a ser borrados!\n¿Estás seguro? (S/N)?"
     STRING_DEL_HELP3 "    Archivo %lu borrado\n"
     STRING_DEL_HELP4 "    Archivos %lu borrados\n"
-    STRING_DELAY_HELP "Espera por n segundos o milisegundos\n\
+    STRING_DELAY_HELP "Espera por n segundos o milisegundos.\n\
 DELAY [/m]n\n\n\
   /m          Especifica que n son milisegundos\n\
-              En otro caso n son segundos\n"
+              En otro caso n son segundos.\n"
     STRING_DIR_HELP1 "DIR [unidad:][ruta][nombre de archivo] [/A[[:]atributos]] [/B] [/C] [/D] [/L] [/N]\n\
   [/O[[:]orden]] [/P] [/Q] [/R] [/S] [/T[[:]fecha]] [/W] [/X] [/4]\n\n\
   [unidad:][ruta][nombre de archivo]\n\
@@ -471,8 +475,6 @@ title         Nuevo título\n"
     STRING_ALIAS_ERROR "¡Línea de comandos demasiado larga tras la expansión del alias!\n"
     STRING_ASSOC_ERROR "No se ha encontrado ninguna asociación de archivos para la extensión %s\n"
     STRING_BATCH_ERROR "Error abriendo el archivo por lotes\n"
-    STRING_CHCP_ERROR1 "Página codificación activa: %u\n"
-    STRING_CHCP_ERROR4 "Código de página inválido\n"
     STRING_CHOICE_ERROR "Opción inválida. Se esperaba el formato: /C[:]options"
     STRING_CHOICE_ERROR_TXT "Opción inválida. Se esperaba el formato: /T[:]c,nn"
     STRING_CHOICE_ERROR_OPTION "Opción ilegal: %s"
@@ -483,7 +485,6 @@ title         Nuevo título\n"
     STRING_CMD_ERROR5 "Ejecutando cmdexit.bat...\n"
     STRING_COLOR_ERROR1 "¡Mismos colores! (El color de frente y de fondo no pueden ser el mismo)"
     STRING_COLOR_ERROR2 "Error en la especificación del color"
-    STRING_COLOR_ERROR3 "Color %02x\n"
     STRING_CONSOLE_ERROR "Error desconocido: %d\n"
     STRING_COPY_ERROR1 "Error: No se puede abrir el origen - %s!\n"
     STRING_COPY_ERROR2 "Error: ¡No se puede copiar sobre si mismo!\n"

@@ -49,10 +49,6 @@ CD[..|.]\n\n\
   /D   Akan mengubah drive dan direktori saat ini.\n\n\
 Ketik CD drive: untuk menampilkan direktori saat ini pada drive tertentu.\n\
 Ketik CD tanpa parameter untuk menampilkan drive dan direktori saat ini.\n"
-    STRING_CHCP_HELP "Menampilkan atau menyetel nomor halaman kode aktif.\n\n\
-CHCP [nnn]\n\n\
-  nnn   Menetapkan nomor halaman kode yang aktif.\n\n\
-Ketik CHCP tanpa parameter untuk menampilkan nomor halaman kode yang aktif.\n"
     STRING_CHOICE_HELP "Menunggu pengguna untuk memilih satu dari set pilihan.\n\n\
 CHOICE  [/C[:]pilihan][/N][/S][/T[:]c,nn][text]\n\n\
   /C[:]pilihan  Menetapkan tombol yang dibolehkan. Standarnya YT.\n\
@@ -77,9 +73,9 @@ CMD [/[C|K] command][/P][/Q][/T:bf]\n\n\
               (tidak bisa diakhiri).\n\
   /T:bf       Menyetel warna latar belakang/depan (lihat perintah COLOR).\n"
     STRING_COLOR_HELP1 "Menyetel warna standar latar belakang dan depan.\n\n\
-COLOR [attr [/-F]] \n\n\
-  attr        Menetapkan atribut warna output konsol\n\
-  /-F         Tidak memenuhi ruang kosong konsol dengan atribut warna\n\n\
+COLOR [attr [/-F]]\n\n\
+  attr        Menetapkan atribut warna output konsol.\n\
+  /-F         Tidak memenuhi ruang kosong konsol dengan atribut warna.\n\n\
 Ada tiga cara untuk menetapkan warna:\n\
 1) [bright] nama pada [bright] nama  (hanya tiga huruf pertama yang dipakai)\n\
 2) desimal pada desimal\n\
@@ -109,6 +105,14 @@ COPY [/V][/Y|/-Y][/A|/B] sumber [/A|/B]\n\
                file tujuan yang sudah ada.\n\n\
 Saklar /Y mungkin ada dalam variabel lingkungan COPYCMD.\n\
 ...\n"
+    STRING_CTTY_HELP "Changes the standard I/O terminal device to an auxiliary device.\n\n\
+CTTY device\n\n\
+  device    The terminal device you want to use as the new standard I/O device.\n\
+            This name must refer to a valid character device:\n\
+            AUX, COMx (x=1..N), CON, LPTx (x=1..N), PRN, NUL.\n\
+            CON is usually the default standard I/O device.\n\n\
+To return control to the standard console, type: CTTY CON on the auxiliary\n\
+device."
     STRING_DATE_HELP1 "\nMasukkan tanggal baru (mm%cdd%cyyyy): "
     STRING_DATE_HELP2 "\nMasukkan tanggal baru (dd%cmm%cyyyy): "
     STRING_DATE_HELP3 "\nMasukkan tanggal baru (yyyy%cmm%cdd): "
@@ -140,10 +144,10 @@ ERASE [/N /P /T /Q /S /W /Y /Z /A[[:]attributes]] file ...\n\n\
     STRING_DEL_HELP2 "Semua file dalam direktori akan dihapus!\nAnda yakin (Y/T)?"
     STRING_DEL_HELP3 "    %lu file dihapus\n"
     STRING_DEL_HELP4 "    %lu file dihapus\n"
-    STRING_DELAY_HELP "menunda n detik atau milidetik\n\
+    STRING_DELAY_HELP "Menunda n detik atau milidetik.\n\
 DELAY [/m]n\n\n\
-  /m          menetapkan bahwa n adalah milidetik\n\
-              sebaliknya n adalah detik\n"
+  /m          Menetapkan bahwa n adalah milidetik\n\
+              sebaliknya n adalah detik.\n"
     STRING_DIR_HELP1 "DIR [drive:][path][filename] [/A[[:]attributes]] [/B] [/C] [/D] [/L] [/N]\n\
   [/O[[:]sortorder]] [/P] [/Q] [/R] [/S] [/T[[:]timefield]] [/W] [/X] [/4]\n\n\
   [drive:][path][filename]\n\
@@ -468,8 +472,6 @@ title         judul baru\n"
     STRING_ALIAS_ERROR "Baris perintah terlalu panjang setelah ekspansi alias!\n"
     STRING_ASSOC_ERROR "File association not found for extension %s\n"
     STRING_BATCH_ERROR "Kesalaham membuka file batch\n"
-    STRING_CHCP_ERROR1 "Halaman kode aktif: %u\n"
-    STRING_CHCP_ERROR4 "Halaman kode tidak benar\n"
     STRING_CHOICE_ERROR "Opsi tidak benar. Format diharapkan: /C[:]options"
     STRING_CHOICE_ERROR_TXT "Opsi tidak benar. Format diharapkan: /T[:]c,nn"
     STRING_CHOICE_ERROR_OPTION "Opsi tidak benar: %s"
@@ -480,7 +482,6 @@ title         judul baru\n"
     STRING_CMD_ERROR5 "Menjalankan cmdexit.bat...\n"
     STRING_COLOR_ERROR1 "Warna sama salah! (Latar belakang dan latar depan tidak bisa berwarna sama)"
     STRING_COLOR_ERROR2 "Kesalahan dalam spesifikasi warna"
-    STRING_COLOR_ERROR3 "Warna %02x\n"
     STRING_CONSOLE_ERROR "Kesalahan tidak dikenal: %d\n"
     STRING_COPY_ERROR1 "Salah: Tidak dapat membuka sumber - %s!\n"
     STRING_COPY_ERROR2 "Salah: Tidak dapat mengcopy ke dirinya sendiri!\n"

@@ -49,10 +49,6 @@ CD[..|.]\n\n\
   /D   Одновременная смена текущих диска и каталога.\n\n\
 Команда CD диск: отображает имя текущего каталога указанного диска.\n\
 Команда CD без параметров отображает имена текущих диска и каталога.\n"
-    STRING_CHCP_HELP "Вывод или смена текущего номера кодовой страницы.\n\n\
-CHCP [nnn]\n\n\
-  nnn   Номер кодовой страницы.\n\n\
-Команда CHCP без параметра выводит текущий номер кодовой страницы.\n"
     STRING_CHOICE_HELP "Ждет, пока пользователь не выберет один из указанных в списке символов.\n\n\
 CHOICE  [/C[:]список_символов][/N][/S][/T[:]c,nn][текст]\n\n\
   /C[:]список_символов  Указывает допустимые символы. По умолчанию это YN.\n\
@@ -77,9 +73,9 @@ CMD [/[C|K] команда][/P][/Q][/T:bf]\n\n\
               (процесс неможет быть завершен).\n\
   /T:bf       Выбор цвета текста/фона (более подробно см. COLOR /?).\n"
     STRING_COLOR_HELP1 "Установка цветов по умолчанию для текста и фона.\n\n\
-COLOR [цвета [/-F]] \n\n\
-  цвета       Атрибуты цветов для текстовых окон\n\
-  /-F         Не заливать незаполненные места цветом\n\n\
+COLOR [цвета [/-F]]\n\n\
+  цвета       Атрибуты цветов для текстовых окон.\n\
+  /-F         Не заливать незаполненные места цветом.\n\n\
 Есть три способа обозначать цвета:\n\
 1) по названию на английском языке (требуются только первые три буквы цвета)\n\
 2) в виде десятичных чисел (decimal on decimal)\n\
@@ -109,6 +105,14 @@ COPY [/V][/Y | /-Y] [/A | /B] источник [/A | /B]\n\
                результирующего файла.\n\n\
 Ключ /Y можно установить через переменную среды COPYCMD.\n\
 ...\n"
+    STRING_CTTY_HELP "Changes the standard I/O terminal device to an auxiliary device.\n\n\
+CTTY device\n\n\
+  device    The terminal device you want to use as the new standard I/O device.\n\
+            This name must refer to a valid character device:\n\
+            AUX, COMx (x=1..N), CON, LPTx (x=1..N), PRN, NUL.\n\
+            CON is usually the default standard I/O device.\n\n\
+To return control to the standard console, type: CTTY CON on the auxiliary\n\
+device."
     STRING_DATE_HELP1 "\nВведите новую дату (мм%cдд%cгггг): "
     STRING_DATE_HELP2 "\nВведите новую дату (дд%cмм%cгггг): "
     STRING_DATE_HELP3 "\nВведите новую дату (гггг%cмм%cдд): "
@@ -141,10 +145,10 @@ ERASE [/N] [/P] [/T] [/Q] [/S] [/W] [/Y] [/Z] [/A[[:]атрибуты]] имен
     STRING_DEL_HELP2 "Все файлы в каталоге будут удалены!\nВы уверены (Y/N)?"
     STRING_DEL_HELP3 "    %lu файл удален\n"
     STRING_DEL_HELP4 "    %lu файлов удалено\n"
-    STRING_DELAY_HELP "пауза на n секунд или миллисекунд\n\
+    STRING_DELAY_HELP "Пауза на n секунд или миллисекунд.\n\
 DELAY [/m]n\n\n\
-  /m          указывает, что n означает количество миллисекунд\n\
-              иначе n означает количество секунд\n"
+  /m          Указывает, что n означает количество миллисекунд\n\
+              иначе n означает количество секунд.\n"
     STRING_DIR_HELP1 "DIR [диск:][путь][имя_файла] [/A[[:]атрибуты]] [/B] [/C] [/D] [/L] [/N]\n\
   [/O[[:]сортировка]] [/P] [/Q] [/R] [/S] [/T[[:]время]] [/W] [/X] [/4]\n\n\
   [диск:][путь][имя_файла]\n\
@@ -385,18 +389,18 @@ SET [переменная[=][значение]]\n\n\
   значение    Строка символов, присваиваемая указанной переменной.\n\n\
 SET без параметров выводит текущие значения переменных среды.\n"
     STRING_START_HELP1 "Запуск указанной программы или команды.\n\n\
-START [""title""] [/D path] [/I] [/B] [/MIN] [/MAX] [/WAIT]\n\
-      [command/program] [parameters]\n\n\
-  ""title""     Title of the window.\n\
-  path        Specifies the startup directory.\n\
-  I           Uses the original environment given to cmd.exe,\n\
-              instead of the current environment.\n\
-  B           Starts the command or program without creating any window.\n\
-  MIN         Starts with a minimized window.\n\
-  MAX         Starts with a maximized window.\n\
-  WAIT        Starts the command or program and waits for its termination.\n\
-  команда     Команда или программа для запуска.\n\
-  parameters  Specifies the parameters to be given to the command or program.\n"
+START [""заголовок""] [/D путь] [/I] [/B] [/MIN] [/MAX] [/WAIT]\n\
+      [команда/программа] [параметры]\n\n\
+  ""заголовок""   Заголовок окна.\n\
+  путь          Каталог запуска.\n\
+  I             Новой средой станет исходная среда, переданная cmd.exe\n\
+                вместо текущей среды.\n\
+  B             Запустить команду или программу без создания нового окна.\n\
+  MIN           Запустить в свернутом окне.\n\
+  MAX           Запустить в развернутом окне.\n\
+  WAIT          Запустить команду или программу и ждать завершения.\n\
+  команда       Команда или программа для запуска.\n\
+  параметры     Параметры, передаваемые команде или программе.\n"
     STRING_TITLE_HELP "Изменение заголовка окна командной строки.\n\n\
 TITLE [строка]\n\n\
 строка       Будущий заголовок окна командной строки.\n"
@@ -479,8 +483,6 @@ RESTORE       восстанавливает окно\n\
     STRING_ALIAS_ERROR "Командная строка слишком длинная после развертывания псевдонимов!\n"
     STRING_ASSOC_ERROR "Не найдено файловых ассоциаций для расширения %s\n"
     STRING_BATCH_ERROR "Ошибка открытия командного файла\n"
-    STRING_CHCP_ERROR1 "Текущая кодовая страница: %u\n"
-    STRING_CHCP_ERROR4 "Неверная кодовая страница\n"
     STRING_CHOICE_ERROR "Неверный параметр. Ожидается формат: /C[:]параметры"
     STRING_CHOICE_ERROR_TXT "Неверный параметр. Ожидается формат: /T[:]c,nn"
     STRING_CHOICE_ERROR_OPTION "Неверный параметр: %s"
@@ -491,7 +493,6 @@ RESTORE       восстанавливает окно\n\
     STRING_CMD_ERROR5 "Запуск cmdexit.bat...\n"
     STRING_COLOR_ERROR1 "Одинаковые цвета! (Цвета фона и текста не могут быть одинаковыми)"
     STRING_COLOR_ERROR2 "Ошибка в указании цвета"
-    STRING_COLOR_ERROR3 "Цвет %02x\n"
     STRING_CONSOLE_ERROR "Неизвестная ошибка: %d\n"
     STRING_COPY_ERROR1 "Ошибка: Невозможно открыть источник - %s!\n"
     STRING_COPY_ERROR2 "Ошибка: Невозможно копировать в себя!\n"
