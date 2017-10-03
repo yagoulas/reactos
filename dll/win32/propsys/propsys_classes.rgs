@@ -9,5 +9,9 @@ HKCR
         {
             InprocServer32 = s '%MODULE%' { val ThreadingModel = s 'Both' }
         }
+        '{b8967f85-58ae-4f46-9fb2-5d7904798f4b}' = s 'Property System'
+        {
+            InprocServer32 = s '%MODULE%' { val ThreadingModel = s 'Both' }
+        }
     }
 }

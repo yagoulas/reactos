@@ -100,6 +100,16 @@ static HRESULT WINAPI InMemoryPropertyStoreFactory_CreateInstance(IClassFactory 
     return PropertyStore_CreateInstance(outer, riid, ppv);
 }
 
+HRESULT WINAPI PSGetPropertySystem(REFIID riid, void **obj);
+
+static HRESULT WINAPI PropertySystemFactory_CreateInstance(IClassFactory *iface, IUnknown *outer,
+        REFIID riid, void **ppv)
+{
+    TRACE("(%p %s %p)\n", outer, debugstr_guid(riid), ppv);
+
+    return PSGetPropertySystem(riid, ppv);
+}
+
 static const IClassFactoryVtbl InMemoryPropertyStoreFactoryVtbl = {
     ClassFactory_QueryInterface,
     ClassFactory_AddRef,
@@ -108,13 +118,26 @@ static const IClassFactoryVtbl InMemoryPropertyStoreFactoryVtbl = {
     ClassFactory_LockServer
 };
 
+static const IClassFactoryVtbl PropertySystemFactoryVtbl = {
+    ClassFactory_QueryInterface,
+    ClassFactory_AddRef,
+    ClassFactory_Release,
+    PropertySystemFactory_CreateInstance,
+    ClassFactory_LockServer
+};
+
 static IClassFactory InMemoryPropertyStoreFactory = { &InMemoryPropertyStoreFactoryVtbl };
+static IClassFactory PropertySystemFactory = { &PropertySystemFactoryVtbl };
 
 HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID *ppv)
 {
     if(IsEqualGUID(&CLSID_InMemoryPropertyStore, rclsid)) {
         TRACE("(CLSID_InMemoryPropertyStore %s %p)\n", debugstr_guid(riid), ppv);
         return IClassFactory_QueryInterface(&InMemoryPropertyStoreFactory, riid, ppv);
+    }
+    if(IsEqualGUID(&CLSID_PropertySystem, rclsid)) {
+        TRACE("(CLSID_PropertySystem %s %p)\n", debugstr_guid(riid), ppv);
+        return IClassFactory_QueryInterface(&PropertySystemFactory, riid, ppv);
     }
 
     FIXME("%s %s %p\n", debugstr_guid(rclsid), debugstr_guid(riid), ppv);
@@ -240,7 +263,7 @@ HRESULT WINAPI PSUnregisterPropertySchema(PCWSTR path)
 {
     FIXME("%s stub\n", debugstr_w(path));
 
-    return E_NOTIMPL;
+    return S_OK;
 }
 
 HRESULT WINAPI PSGetPropertyDescription(REFPROPERTYKEY propkey, REFIID riid, void **ppv)
