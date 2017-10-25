@@ -28,29 +28,30 @@ class CProgressDialog :
     public IOleWindow
 {
 public:
-    CRITICAL_SECTION cs;
-    HWND hwnd;
-    DWORD dwFlags;
-    DWORD dwUpdate;
-    LPWSTR lines[3];
-    LPWSTR cancelMsg;
-    LPWSTR title;
-    BOOL isCancelled;
-    ULONGLONG ullCompleted;
-    ULONGLONG ullTotal;
-    HWND hwndDisabledParent;
-    void set_progress_marquee();
-    void update_dialog(DWORD dwUpdate);
-    void end_dialog();
+    CRITICAL_SECTION m_cs;
+    HWND m_hwnd;
+    DWORD m_dwFlags;
+    DWORD m_dwUpdate;
+    LPWSTR m_lines[3];
+    LPWSTR m_cancelMsg;
+    LPWSTR m_title;
+    BOOL m_isCancelled;
+    ULONGLONG m_ullCompleted;
+    ULONGLONG m_ullTotal;
+    HWND m_hwndDisabledParent;
 
-    UINT clockHand;
+    UINT m_clockHand;
     struct progressMark {
         ULONGLONG ullMark;
         DWORD     dwTime;
     };
-    progressMark progressClock[30];
-    DWORD dwStartTime;
+    progressMark m_progressClock[30];
+    DWORD m_dwStartTime;
 
+    void set_progress_marquee();
+    void update_dialog(DWORD dwUpdate);
+    void end_dialog();
+    
     CProgressDialog();
     ~CProgressDialog();
 
