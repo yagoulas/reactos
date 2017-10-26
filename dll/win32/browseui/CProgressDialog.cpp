@@ -72,15 +72,15 @@ CProgressDialog::~CProgressDialog()
     m_cs.Term();
 }
 
-static void set_buffer(LPWSTR *buffer, LPCWSTR string)
+static void set_buffer(LPWSTR buffer, LPCWSTR string)
 {
     if (!string)
     {
-        (*buffer)[0] = UNICODE_NULL;
+        buffer[0] = UNICODE_NULL;
         return;
     }
 
-    StringCbCopyW(*buffer, BUFFER_SIZE, string);
+    StringCbCopyW(buffer, BUFFER_SIZE, string);
 }
 
 struct create_params
@@ -90,13 +90,9 @@ struct create_params
     HWND hwndParent;
 };
 
-static void load_string(LPWSTR *buffer, HINSTANCE hInstance, UINT uiResourceId)
+static void load_string(LPWSTR buffer, HINSTANCE hInstance, UINT uiResourceId)
 {
-    WCHAR string[256];
-
-    LoadStringW(hInstance, uiResourceId, string, sizeof(string)/sizeof(string[0]));
-
-    set_buffer(buffer, string);
+    LoadStringW(hInstance, uiResourceId, buffer, BUFFER_SIZE);
 }
 
 void CProgressDialog::set_progress_marquee()
@@ -203,7 +199,7 @@ static INT_PTR CALLBACK dialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 This->m_isCancelled = TRUE;
 
                 if (!This->m_cancelMsg[0]) {
-                    load_string(&This->m_cancelMsg, _AtlBaseModule.GetResourceInstance(), IDS_CANCELLING);
+                    load_string(This->m_cancelMsg, _AtlBaseModule.GetResourceInstance(), IDS_CANCELLING);
                 }
 
                 This->set_progress_marquee();
@@ -325,7 +321,7 @@ HRESULT WINAPI CProgressDialog::SetTitle(LPCWSTR pwzTitle)
     HWND hwnd;
 
     m_cs.Lock();
-    set_buffer(&m_title, pwzTitle);
+    set_buffer(m_title, pwzTitle);
     m_dwUpdate |= UPDATE_TITLE;
     hwnd = m_hwnd;
     m_cs.Unlock();
@@ -395,7 +391,7 @@ HRESULT WINAPI CProgressDialog::SetLine(DWORD dwLineNum, LPCWSTR pwzLine, BOOL b
         dwLineNum = 0;
 
     m_cs.Lock();
-    set_buffer(&m_lines[dwLineNum], pwzLine);
+    set_buffer(m_lines[dwLineNum], pwzLine);
     m_dwUpdate |= UPDATE_LINE1 << dwLineNum;
     hwnd = (m_isCancelled ? NULL : m_hwnd); /* no sense to send the message if window cancelled */
     m_cs.Unlock();
@@ -414,7 +410,7 @@ HRESULT WINAPI CProgressDialog::SetCancelMsg(LPCWSTR pwzMsg, LPCVOID reserved)
         FIXME("reserved pointer not null (%p)\n", reserved);
 
     m_cs.Lock();
-    set_buffer(&m_cancelMsg, pwzMsg);
+    set_buffer(m_cancelMsg, pwzMsg);
     m_dwUpdate |= UPDATE_LINE1 << CANCEL_MSG_LINE;
     hwnd = (m_isCancelled ? m_hwnd : NULL); /* no sense to send the message if window not cancelled */
     m_cs.Unlock();
