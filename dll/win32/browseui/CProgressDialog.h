@@ -21,7 +21,11 @@
 #ifndef _PROGRESSDIALOG_H_
 #define _PROGRESSDIALOG_H_
 
+#define WM_DLG_UPDATE   (WM_APP+1)  /* set to the dialog when it should update */
+#define WM_DLG_DESTROY  (WM_APP+2)  /* DestroyWindow must be called from the owning thread */
+
 class CProgressDialog :
+    public CDialogImpl<CProgressDialog>,
     public CComCoClass<CProgressDialog, &CLSID_ProgressDialog>,
     public CComObjectRootEx<CComMultiThreadModelNoCS>,
     public IProgressDialog,
@@ -51,7 +55,13 @@ public:
     void set_progress_marquee();
     void update_dialog(DWORD dwUpdate);
     void end_dialog();
-    
+
+    LRESULT OnInitDialog(UINT nMessage, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
+    LRESULT OnTimer(UINT nMessage, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
+    LRESULT OnDlgUpdate(UINT nMessage, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
+    LRESULT OnDlgDestroy(UINT nMessage, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
+    LRESULT OnCommand(UINT nMessage, WPARAM wParam, LPARAM lParam, BOOL& bHandled);
+
     CProgressDialog();
     ~CProgressDialog();
 
@@ -80,6 +90,17 @@ BEGIN_COM_MAP(CProgressDialog)
     COM_INTERFACE_ENTRY_IID(IID_IProgressDialog, IProgressDialog)
     COM_INTERFACE_ENTRY_IID(IID_IOleWindow, IOleWindow)
 END_COM_MAP()
+
+enum { IDD = IDD_PROGRESS_DLG };
+
+BEGIN_MSG_MAP(CProgressDialog)
+    MESSAGE_HANDLER(WM_INITDIALOG, OnInitDialog)
+    MESSAGE_HANDLER(WM_TIMER, OnTimer)
+    MESSAGE_HANDLER(WM_DLG_UPDATE, OnDlgUpdate)
+    MESSAGE_HANDLER(WM_DLG_DESTROY, OnDlgDestroy)
+    MESSAGE_HANDLER(WM_CLOSE, OnCommand)
+    MESSAGE_HANDLER(WM_COMMAND, OnCommand)
+END_MSG_MAP()
 };
 
 #endif /* _PROGRESSDIALOG_H_ */

@@ -38,10 +38,6 @@
 #define UPDATE_LINE2            (UPDATE_LINE1<<1)
 #define UPDATE_LINE3            (UPDATE_LINE1<<2)
 
-
-#define WM_DLG_UPDATE   (WM_APP+1)  /* set to the dialog when it should update */
-#define WM_DLG_DESTROY  (WM_APP+2)  /* DestroyWindow must be called from the owning thread */
-
 #define ID_3SECONDS 101
 
 #define BUFFER_SIZE 256
@@ -93,9 +89,9 @@ static void load_string(LPWSTR buffer, HINSTANCE hInstance, UINT uiResourceId)
 
 void CProgressDialog::set_progress_marquee()
 {
-    HWND hProgress = GetDlgItem(m_hwnd, IDC_PROGRESS_BAR);
-    SetWindowLongW(hProgress, GWL_STYLE,
-        GetWindowLongW(hProgress, GWL_STYLE)|PBS_MARQUEE);
+    HWND hProgress = GetDlgItem(IDC_PROGRESS_BAR);
+    ::SetWindowLongW(hProgress, GWL_STYLE,
+        ::GetWindowLongW(hProgress, GWL_STYLE)|PBS_MARQUEE);
 }
 
 void CProgressDialog::update_dialog(DWORD dwUpdate)
@@ -103,14 +99,14 @@ void CProgressDialog::update_dialog(DWORD dwUpdate)
     WCHAR empty[] = {0};
 
     if (dwUpdate & UPDATE_TITLE)
-        SetWindowTextW(m_hwnd, m_strings[TITLE_INDEX]);
+        SetWindowTextW(m_strings[TITLE_INDEX]);
 
     if (dwUpdate & UPDATE_LINE1)
-        SetDlgItemTextW(m_hwnd, IDC_TEXT_LINE, (m_isCancelled ? empty : m_strings[0]));
+        SetDlgItemTextW(IDC_TEXT_LINE, (m_isCancelled ? empty : m_strings[0]));
     if (dwUpdate & UPDATE_LINE2)
-        SetDlgItemTextW(m_hwnd, IDC_TEXT_LINE+1, (m_isCancelled ? empty : m_strings[1]));
+        SetDlgItemTextW(IDC_TEXT_LINE+1, (m_isCancelled ? empty : m_strings[1]));
     if (dwUpdate & UPDATE_LINE3)
-        SetDlgItemTextW(m_hwnd, IDC_TEXT_LINE+2, (m_isCancelled ? m_strings[CANCEL_MSG_INDEX] : m_strings[2]));
+        SetDlgItemTextW(IDC_TEXT_LINE+2, (m_isCancelled ? m_strings[CANCEL_MSG_INDEX] : m_strings[2]));
 
     if (dwUpdate & UPDATE_PROGRESS)
     {
@@ -124,111 +120,96 @@ void CProgressDialog::update_dialog(DWORD dwUpdate)
             ullCompleted >>= 1;
         }
 
-        SendDlgItemMessageW(m_hwnd, IDC_PROGRESS_BAR, PBM_SETRANGE32, 0, (DWORD)ullTotal);
-        SendDlgItemMessageW(m_hwnd, IDC_PROGRESS_BAR, PBM_SETPOS, (DWORD)ullCompleted, 0);
+        SendDlgItemMessage(IDC_PROGRESS_BAR, PBM_SETRANGE32, 0, (DWORD)ullTotal);
+        SendDlgItemMessage(IDC_PROGRESS_BAR, PBM_SETPOS, (DWORD)ullCompleted, 0);
     }
 }
 
 void CProgressDialog::end_dialog()
 {
-    SendMessageW(m_hwnd, WM_DLG_DESTROY, 0, 0);
+    SendMessage(WM_DLG_DESTROY, 0, 0);
     /* native doesn't re-enable the window? */
     if (m_hwndDisabledParent)
-        EnableWindow(m_hwndDisabledParent, TRUE);
-    m_hwnd = NULL;
+        ::EnableWindow(m_hwndDisabledParent, TRUE);
 }
 
-static INT_PTR CALLBACK dialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+LRESULT CProgressDialog::OnInitDialog(UINT nMessage, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
-    CProgressDialog *This = (CProgressDialog *)GetWindowLongPtrW(hwnd, DWLP_USER);
+    if (m_dwFlags & PROGDLG_NOPROGRESSBAR)
+        ::ShowWindow(GetDlgItem(IDC_PROGRESS_BAR), SW_HIDE);
+    if (m_dwFlags & PROGDLG_NOCANCEL)
+        ::ShowWindow(GetDlgItem(IDCANCEL), SW_HIDE);
+    if (m_dwFlags & PROGDLG_MARQUEEPROGRESS)
+        set_progress_marquee();
+    if (m_dwFlags & PROGDLG_NOMINIMIZE)
+        SetWindowLongW(GWL_STYLE, GetWindowLongW(GWL_STYLE) & (~WS_MINIMIZEBOX));
 
-    switch (msg)
+    update_dialog(0xffffffff);
+    m_dwUpdate = 0;
+    m_isCancelled = FALSE;
+
+    SetTimer(ID_3SECONDS, 3 * 1000, NULL);
+    
+    SetEvent(m_hThreadStartEvent);
+    return TRUE;
+}
+
+LRESULT CProgressDialog::OnDlgUpdate(UINT nMessage, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+    CComCritSecLock<CComCriticalSection> lock(m_cs, true);
+    update_dialog(m_dwUpdate);
+    m_dwUpdate = 0;
+    return TRUE;
+}
+
+LRESULT CProgressDialog::OnDlgDestroy(UINT nMessage, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+    DestroyWindow();
+    PostThreadMessageW(GetCurrentThreadId(), WM_NULL, 0, 0); /* wake up the GetMessage */
+    KillTimer(ID_3SECONDS);
+    return TRUE;
+}
+
+LRESULT CProgressDialog::OnCommand(UINT nMessage, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+    if (nMessage == WM_CLOSE || wParam == IDCANCEL)
     {
-        case WM_INITDIALOG:
-        {
-            This = reinterpret_cast<CProgressDialog*>(lParam);
+        CComCritSecLock<CComCriticalSection> lock(m_cs, true);
+        m_isCancelled = TRUE;
 
-            /* Note: until we set the hEvent, the object is protected by
-             * the critical section held by StartProgress */
-            SetWindowLongPtrW(hwnd, DWLP_USER, (LONG_PTR)This);
-            This->m_hwnd = hwnd;
-
-            if (This->m_dwFlags & PROGDLG_NOPROGRESSBAR)
-                ShowWindow(GetDlgItem(hwnd, IDC_PROGRESS_BAR), SW_HIDE);
-            if (This->m_dwFlags & PROGDLG_NOCANCEL)
-                ShowWindow(GetDlgItem(hwnd, IDCANCEL), SW_HIDE);
-            if (This->m_dwFlags & PROGDLG_MARQUEEPROGRESS)
-                This->set_progress_marquee();
-            if (This->m_dwFlags & PROGDLG_NOMINIMIZE)
-                SetWindowLongW(hwnd, GWL_STYLE, GetWindowLongW(hwnd, GWL_STYLE) & (~WS_MINIMIZEBOX));
-
-            This->update_dialog(0xffffffff);
-            This->m_dwUpdate = 0;
-            This->m_isCancelled = FALSE;
-
-            SetTimer(hwnd, ID_3SECONDS, 3 * 1000, NULL);
-            
-            SetEvent(This->m_hThreadStartEvent);
-            return TRUE;
+        if (!m_strings[CANCEL_MSG_INDEX][0]) {
+            load_string(m_strings[CANCEL_MSG_INDEX], _AtlBaseModule.GetResourceInstance(), IDS_CANCELLING);
         }
 
-        case WM_DLG_UPDATE:
-        {
-            CComCritSecLock<CComCriticalSection> lock(This->m_cs, true);
-            This->update_dialog(This->m_dwUpdate);
-            This->m_dwUpdate = 0;
-            return TRUE;
-        }
-        case WM_DLG_DESTROY:
-            DestroyWindow(hwnd);
-            PostThreadMessageW(GetCurrentThreadId(), WM_NULL, 0, 0); /* wake up the GetMessage */
-            KillTimer(hwnd, ID_3SECONDS);
-
-            return TRUE;
-
-        case WM_CLOSE:
-        case WM_COMMAND:
-            if (msg == WM_CLOSE || wParam == IDCANCEL)
-            {
-                CComCritSecLock<CComCriticalSection> lock(This->m_cs, true);
-                This->m_isCancelled = TRUE;
-
-                if (!This->m_strings[CANCEL_MSG_INDEX][0]) {
-                    load_string(This->m_strings[CANCEL_MSG_INDEX], _AtlBaseModule.GetResourceInstance(), IDS_CANCELLING);
-                }
-
-                This->set_progress_marquee();
-                EnableWindow(GetDlgItem(This->m_hwnd, IDCANCEL), FALSE);
-                This->update_dialog(UPDATE_LINE1|UPDATE_LINE2|UPDATE_LINE3);
-            }
-            return TRUE;
-
-        case WM_TIMER:
-        {
-            CComCritSecLock<CComCriticalSection> lock(This->m_cs, true);
-            if (This->m_progressClock[29].ullMark != 0ull) {
-                // We have enough info to take a guess
-                ULONGLONG sizeDiff = This->m_progressClock[This->m_clockHand].ullMark - 
-                                     This->m_progressClock[(This->m_clockHand + 29) % 30].ullMark;
-                DWORD     timeDiff = This->m_progressClock[This->m_clockHand].dwTime - 
-                                     This->m_progressClock[(This->m_clockHand + 29) % 30].dwTime;
-                DWORD      runDiff = This->m_progressClock[This->m_clockHand].dwTime - 
-                                     This->m_dwStartTime;
-                ULONGLONG sizeLeft = This->m_ullTotal - This->m_progressClock[This->m_clockHand].ullMark;
-
-                // A guess for time remaining based on the recent slope.
-                DWORD timeLeftD = (DWORD) timeDiff * ((double) sizeLeft) / ((double) sizeDiff);
-                // A guess for time remaining based on the start time and current position
-                DWORD timeLeftI = (DWORD) runDiff * ((double) sizeLeft) / ((double) This->m_progressClock[This->m_clockHand].ullMark);
-
-                StrFromTimeIntervalW(This->m_strings[2], 128, timeLeftD * 0.3 + timeLeftI * 0.7 , 2);
-                This->update_dialog( UPDATE_LINE1 << 2 );
-            }
-
-            return TRUE;
-        }
+        set_progress_marquee();
+        ::EnableWindow(GetDlgItem(IDCANCEL), FALSE);
+        update_dialog(UPDATE_LINE1|UPDATE_LINE2|UPDATE_LINE3);
     }
-    return FALSE;
+    return TRUE;
+}
+
+LRESULT CProgressDialog::OnTimer(UINT nMessage, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+    CComCritSecLock<CComCriticalSection> lock(m_cs, true);
+    if (m_progressClock[29].ullMark != 0ull) {
+        // We have enough info to take a guess
+        ULONGLONG sizeDiff = m_progressClock[m_clockHand].ullMark - 
+                             m_progressClock[(m_clockHand + 29) % 30].ullMark;
+        DWORD     timeDiff = m_progressClock[m_clockHand].dwTime - 
+                             m_progressClock[(m_clockHand + 29) % 30].dwTime;
+        DWORD      runDiff = m_progressClock[m_clockHand].dwTime - 
+                             m_dwStartTime;
+        ULONGLONG sizeLeft = m_ullTotal - m_progressClock[m_clockHand].ullMark;
+
+        // A guess for time remaining based on the recent slope.
+        DWORD timeLeftD = (DWORD) timeDiff * ((double) sizeLeft) / ((double) sizeDiff);
+        // A guess for time remaining based on the start time and current position
+        DWORD timeLeftI = (DWORD) runDiff * ((double) sizeLeft) / ((double) m_progressClock[m_clockHand].ullMark);
+
+        StrFromTimeIntervalW(m_strings[2], 128, timeLeftD * 0.3 + timeLeftI * 0.7 , 2);
+        update_dialog( UPDATE_LINE1 << 2 );
+    }
+    return TRUE;
 }
 
 static DWORD WINAPI dialog_thread(LPVOID lpParameter)
@@ -236,15 +217,10 @@ static DWORD WINAPI dialog_thread(LPVOID lpParameter)
     /* Note: until we set the hEvent in WM_INITDIALOG, the ProgressDialog object
      * is protected by the critical section held by StartProgress */
     CProgressDialog* pThis = reinterpret_cast<CProgressDialog*>(lpParameter);
-    HWND hwnd;
+     
+    HWND hwnd = pThis->Create(pThis->m_hwndParent);
+
     MSG msg;
-
-    hwnd = CreateDialogParamW(_AtlBaseModule.GetResourceInstance(),
-                              MAKEINTRESOURCEW(IDD_PROGRESS_DLG),
-                              pThis->m_hwndParent, 
-                              dialog_proc, 
-                              (LPARAM)lpParameter);
-
     while (GetMessageW(&msg, NULL, 0, 0) > 0)
     {
         if (!IsWindow(hwnd))
@@ -291,7 +267,7 @@ HRESULT WINAPI CProgressDialog::StartProgressDialog(HWND hwndParent, IUnknown *p
     if (hwndParent && (dwFlags & PROGDLG_MODAL))
     {
         HWND hwndDisable = GetAncestor(hwndParent, GA_ROOT);
-        if (EnableWindow(hwndDisable, FALSE))
+        if (::EnableWindow(hwndDisable, FALSE))
             m_hwndDisabledParent = hwndDisable;
     }
 
@@ -325,9 +301,9 @@ HRESULT WINAPI CProgressDialog::SetTitle(LPCWSTR pwzTitle)
 
 HRESULT WINAPI CProgressDialog::SetAnimation(HINSTANCE hInstance, UINT uiResourceId)
 {
-    HWND hAnimation = GetDlgItem(m_hwnd, IDD_PROGRESS_DLG);
-    SetWindowLongW(hAnimation, GWL_STYLE,
-        GetWindowLongW(hAnimation, GWL_STYLE)|ACS_TRANSPARENT|ACS_CENTER|ACS_AUTOPLAY);
+    HWND hAnimation = GetDlgItem(IDD_PROGRESS_DLG);
+    ::SetWindowLongW(hAnimation, GWL_STYLE,
+        ::GetWindowLongW(hAnimation, GWL_STYLE)|ACS_TRANSPARENT|ACS_CENTER|ACS_AUTOPLAY);
 
     if(!Animate_OpenEx(hAnimation,hInstance,MAKEINTRESOURCEW(uiResourceId)))
         return S_FALSE;
