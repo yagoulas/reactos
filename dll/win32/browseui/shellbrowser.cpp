@@ -697,17 +697,20 @@ public:
 
 extern HRESULT CreateProgressDialog(REFIID riid, void **ppv);
 
-CShellBrowser::CShellBrowser()
+CShellBrowser::CShellBrowser():
+    fCurrentShellViewWindow(NULL),
+    fCurrentDirectoryPIDL(NULL),
+    fStatusBar(NULL),
+    fStatusBarVisible(true),
+    fCurrentMenuBar(NULL),
+    fHistoryObject(NULL),
+    fHistoryStream(NULL),
+    fHistoryBindContext(NULL),
+    menuDsa(NULL),
+    fCabinetState{0},
+    m_hAccel(NULL)
 {
-    fCurrentShellViewWindow = NULL;
-    fCurrentDirectoryPIDL = NULL;
-    fStatusBar = NULL;
-    fStatusBarVisible = true;
     memset(fClientBars, 0, sizeof(fClientBars));
-    fCurrentMenuBar = NULL;
-    fHistoryObject = NULL;
-    fHistoryStream = NULL;
-    fHistoryBindContext = NULL;
 }
 
 CShellBrowser::~CShellBrowser()

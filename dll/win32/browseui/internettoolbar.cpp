@@ -609,16 +609,19 @@ HRESULT STDMETHODCALLTYPE CMenuCallback::CallbackSM(LPSMDATA psmd, UINT uMsg, WP
     return S_FALSE;
 }
 
-CInternetToolbar::CInternetToolbar()
+CInternetToolbar::CInternetToolbar():
+    fMainReBar(NULL),
+    fLocked(false),
+    fMenuBandWindow(NULL),
+    fNavigationWindow(NULL),
+    fToolbarWindow(NULL),
+    fAdviseCookie(0),
+    fSizing(FALSE),
+    fStartHeight(0),
+    fStartPosition{0},
+    fCommandCategory{0}
 {
-    fMainReBar = NULL;
-    fLocked = false;
-    fMenuBandWindow = NULL;
-    fNavigationWindow = NULL;
     fMenuCallback = new CComObject<CMenuCallback>();
-    fToolbarWindow = NULL;
-    fAdviseCookie = 0;
-
     fMenuCallback->AddRef();
 }
 

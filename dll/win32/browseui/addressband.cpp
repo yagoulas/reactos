@@ -37,12 +37,14 @@ TODO:
     Implement Save
 */
 
-CAddressBand::CAddressBand()
+CAddressBand::CAddressBand():
+    fEditControl(NULL),
+    fGoButton(NULL),
+    fComboBox(NULL),
+    fGoButtonShown(false),
+    m_himlNormal(NULL),
+    m_himlHot(NULL)
 {
-    fEditControl = NULL;
-    fGoButton = NULL;
-    fComboBox = NULL;
-    fGoButtonShown = false;
 }
 
 CAddressBand::~CAddressBand()

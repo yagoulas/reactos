@@ -35,8 +35,6 @@ class CProxyDesktop :
 {
     IEThreadParamBlock * m_Parameters;
 
-    LPITEMIDLIST m_rootPidl;
-
 public:
     CProxyDesktop(IEThreadParamBlock * parameters) :
         m_Parameters(parameters)

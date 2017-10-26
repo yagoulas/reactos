@@ -34,7 +34,9 @@ CAddressEditBox::CAddressEditBox() :
     fCombobox(NULL, this, 1),
     fEditWindow(NULL, this, 1),
     fSite(NULL),
-    pidlLastParsed(NULL)
+    pidlLastParsed(NULL),
+    fAdviseCookie(NULL),
+    hComboBoxEx(NULL)
 {
 }
 

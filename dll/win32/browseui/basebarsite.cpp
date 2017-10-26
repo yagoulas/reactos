@@ -161,10 +161,13 @@ BEGIN_COM_MAP(CBaseBarSite)
 END_COM_MAP()
 };
 
-CBaseBarSite::CBaseBarSite() : fVertical(TRUE)
+CBaseBarSite::CBaseBarSite() : 
+    fVertical(TRUE),
+    toolbarWnd(NULL),
+    toolImageList(NULL),
+    fCurrentActiveBar(NULL),
+    fNextBandID(1)
 {
-    fCurrentActiveBar = NULL;
-    fNextBandID = 1;
 }
 
 CBaseBarSite::~CBaseBarSite()
@@ -739,7 +742,8 @@ LRESULT CBaseBarSite::OnCustomDraw(LPNMCUSTOMDRAW pnmcd)
                 if (newFont)
                     oldFont = (HFONT)SelectObject(pnmcd->hdc, newFont);
                 DrawText(pnmcd->hdc, info.lpText, -1, &rt, DT_SINGLELINE | DT_LEFT);
-                SelectObject(pnmcd->hdc, oldFont);
+                if (oldFont)
+                    SelectObject(pnmcd->hdc, oldFont);
                 DeleteObject(newFont);
                 return CDRF_SKIPDEFAULT;
             }

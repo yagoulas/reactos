@@ -727,7 +727,6 @@ BOOL CExplorerBand::NavigateToPIDL(LPITEMIDLIST dest, HTREEITEM *item, BOOL bExp
     HTREEITEM                           current;
     HTREEITEM                           tmp;
     HTREEITEM                           parent;
-    BOOL                                found;
     NodeInfo                            *nodeData;
     LPITEMIDLIST                        relativeChild;
     TVITEM                              tvItem;
@@ -735,10 +734,9 @@ BOOL CExplorerBand::NavigateToPIDL(LPITEMIDLIST dest, HTREEITEM *item, BOOL bExp
     if (!item)
         return FALSE;
 
-    found = FALSE;
     current = hRoot;
     parent = NULL;
-    while(!found)
+    while(TRUE)
     {
         nodeData = GetNodeInfo(current);
         if (!nodeData)
