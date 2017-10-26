@@ -57,6 +57,9 @@ CProgressDialog::CProgressDialog()
     m_progressClock[29].ullMark = 0ull;
     m_dwStartTime = GetTickCount();
 
+    m_hwndParent = NULL;
+    m_hThreadStartEvent = NULL;
+
     m_cs.Init();
 }
 
@@ -82,13 +85,6 @@ static void set_buffer(LPWSTR buffer, LPCWSTR string)
 
     StringCbCopyW(buffer, BUFFER_SIZE, string);
 }
-
-struct create_params
-{
-    CProgressDialog *This;
-    HANDLE hEvent;
-    HWND hwndParent;
-};
 
 static void load_string(LPWSTR buffer, HINSTANCE hInstance, UINT uiResourceId)
 {
@@ -150,12 +146,11 @@ static INT_PTR CALLBACK dialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
     {
         case WM_INITDIALOG:
         {
-            struct create_params *params = (struct create_params *)lParam;
+            This = reinterpret_cast<CProgressDialog*>(lParam);
 
             /* Note: until we set the hEvent, the object is protected by
              * the critical section held by StartProgress */
-            SetWindowLongPtrW(hwnd, DWLP_USER, (LONG_PTR)params->This);
-            This = params->This;
+            SetWindowLongPtrW(hwnd, DWLP_USER, (LONG_PTR)This);
             This->m_hwnd = hwnd;
 
             if (This->m_dwFlags & PROGDLG_NOPROGRESSBAR)
@@ -173,7 +168,7 @@ static INT_PTR CALLBACK dialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
 
             SetTimer(hwnd, ID_3SECONDS, 3 * 1000, NULL);
             
-            SetEvent(params->hEvent);
+            SetEvent(This->m_hThreadStartEvent);
             return TRUE;
         }
 
@@ -240,15 +235,15 @@ static DWORD WINAPI dialog_thread(LPVOID lpParameter)
 {
     /* Note: until we set the hEvent in WM_INITDIALOG, the ProgressDialog object
      * is protected by the critical section held by StartProgress */
-    struct create_params *params = (struct create_params *) lpParameter;
+    CProgressDialog* pThis = reinterpret_cast<CProgressDialog*>(lpParameter);
     HWND hwnd;
     MSG msg;
 
     hwnd = CreateDialogParamW(_AtlBaseModule.GetResourceInstance(),
                               MAKEINTRESOURCEW(IDD_PROGRESS_DLG),
-                              params->hwndParent, 
+                              pThis->m_hwndParent, 
                               dialog_proc, 
-                             (LPARAM)params);
+                              (LPARAM)lpParameter);
 
     while (GetMessageW(&msg, NULL, 0, 0) > 0)
     {
@@ -268,9 +263,6 @@ HRESULT WINAPI CProgressDialog::StartProgressDialog(HWND hwndParent, IUnknown *p
 {
     static const INITCOMMONCONTROLSEX init = { sizeof(init), ICC_ANIMATE_CLASS };
 
-    struct create_params params;
-    HANDLE hThread;
-
     // TRACE("(%p, %p, %x, %p)\n", this, punkEnableModeless, dwFlags, reserved);
     if (punkEnableModeless || reserved)
         FIXME("Reserved parameters not null (%p, %p)\n", punkEnableModeless, reserved);
@@ -287,13 +279,12 @@ HRESULT WINAPI CProgressDialog::StartProgressDialog(HWND hwndParent, IUnknown *p
         return S_OK;  /* as on XP */
 
     m_dwFlags = dwFlags;
-    params.This = this;
-    params.hwndParent = hwndParent;
-    params.hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
+    m_hwndParent = hwndParent;
+    m_hThreadStartEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
 
-    hThread = CreateThread(NULL, 0, dialog_thread, &params, 0, NULL);
-    WaitForSingleObject(params.hEvent, INFINITE);
-    CloseHandle(params.hEvent);
+    HANDLE hThread = CreateThread(NULL, 0, dialog_thread, this, 0, NULL);
+    WaitForSingleObject(m_hThreadStartEvent, INFINITE);
+    CloseHandle(m_hThreadStartEvent);
     CloseHandle(hThread);
 
     m_hwndDisabledParent = NULL;
