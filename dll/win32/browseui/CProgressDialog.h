@@ -34,9 +34,7 @@ public:
     HWND m_hwnd;
     DWORD m_dwFlags;
     DWORD m_dwUpdate;
-    LPWSTR m_lines[3];
-    LPWSTR m_cancelMsg;
-    LPWSTR m_title;
+    LPWSTR m_strings[5];
     BOOL m_isCancelled;
     ULONGLONG m_ullCompleted;
     ULONGLONG m_ullTotal;

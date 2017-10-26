@@ -25,6 +25,10 @@
 
 #define CANCEL_MSG_LINE 2
 
+#define CANCEL_MSG_INDEX 3
+
+#define TITLE_INDEX 4
+
 /* Note: to avoid a deadlock we don't want to send messages to the dialog
  * with the critical section held. Instead we only mark what fields should be
  * updated and the dialog proc does the update */
@@ -44,14 +48,11 @@
 
 CProgressDialog::CProgressDialog()
 {
-    m_lines[0]  = (LPWSTR) HeapAlloc(GetProcessHeap(), 0, BUFFER_SIZE);
-    m_lines[1]  = (LPWSTR) HeapAlloc(GetProcessHeap(), 0, BUFFER_SIZE);
-    m_lines[2]  = (LPWSTR) HeapAlloc(GetProcessHeap(), 0, BUFFER_SIZE);
-    m_cancelMsg = (LPWSTR) HeapAlloc(GetProcessHeap(), 0, BUFFER_SIZE);
-    m_title     = (LPWSTR) HeapAlloc(GetProcessHeap(), 0, BUFFER_SIZE);
-
-    m_lines[0][0] = m_lines[1][0] = m_lines[2][0] = UNICODE_NULL;
-    m_cancelMsg[0] = m_title[0] = UNICODE_NULL;
+    for (int i = 0; i< 5; i++)
+    {
+        m_strings[i] = (LPWSTR)HeapAlloc(GetProcessHeap(), 0, BUFFER_SIZE);
+        m_strings[i][0] = UNICODE_NULL;
+    }
 
     m_clockHand = -1;
     m_progressClock[29].ullMark = 0ull;
@@ -67,11 +68,10 @@ CProgressDialog::~CProgressDialog()
 {
     if (m_hwnd)
         end_dialog();
-    HeapFree(GetProcessHeap(), 0, m_lines[0]);
-    HeapFree(GetProcessHeap(), 0, m_lines[1]);
-    HeapFree(GetProcessHeap(), 0, m_lines[2]);
-    HeapFree(GetProcessHeap(), 0, m_cancelMsg);
-    HeapFree(GetProcessHeap(), 0, m_title);
+
+    for (int i = 0; i< 5; i++)
+        HeapFree(GetProcessHeap(), 0, m_strings[i]);
+
     m_cs.Term();
 }
 
@@ -103,14 +103,14 @@ void CProgressDialog::update_dialog(DWORD dwUpdate)
     WCHAR empty[] = {0};
 
     if (dwUpdate & UPDATE_TITLE)
-        SetWindowTextW(m_hwnd, m_title);
+        SetWindowTextW(m_hwnd, m_strings[TITLE_INDEX]);
 
     if (dwUpdate & UPDATE_LINE1)
-        SetDlgItemTextW(m_hwnd, IDC_TEXT_LINE, (m_isCancelled ? empty : m_lines[0]));
+        SetDlgItemTextW(m_hwnd, IDC_TEXT_LINE, (m_isCancelled ? empty : m_strings[0]));
     if (dwUpdate & UPDATE_LINE2)
-        SetDlgItemTextW(m_hwnd, IDC_TEXT_LINE+1, (m_isCancelled ? empty : m_lines[1]));
+        SetDlgItemTextW(m_hwnd, IDC_TEXT_LINE+1, (m_isCancelled ? empty : m_strings[1]));
     if (dwUpdate & UPDATE_LINE3)
-        SetDlgItemTextW(m_hwnd, IDC_TEXT_LINE+2, (m_isCancelled ? m_cancelMsg : m_lines[2]));
+        SetDlgItemTextW(m_hwnd, IDC_TEXT_LINE+2, (m_isCancelled ? m_strings[CANCEL_MSG_INDEX] : m_strings[2]));
 
     if (dwUpdate & UPDATE_PROGRESS)
     {
@@ -193,8 +193,8 @@ static INT_PTR CALLBACK dialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 CComCritSecLock<CComCriticalSection> lock(This->m_cs, true);
                 This->m_isCancelled = TRUE;
 
-                if (!This->m_cancelMsg[0]) {
-                    load_string(This->m_cancelMsg, _AtlBaseModule.GetResourceInstance(), IDS_CANCELLING);
+                if (!This->m_strings[CANCEL_MSG_INDEX][0]) {
+                    load_string(This->m_strings[CANCEL_MSG_INDEX], _AtlBaseModule.GetResourceInstance(), IDS_CANCELLING);
                 }
 
                 This->set_progress_marquee();
@@ -221,7 +221,7 @@ static INT_PTR CALLBACK dialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 // A guess for time remaining based on the start time and current position
                 DWORD timeLeftI = (DWORD) runDiff * ((double) sizeLeft) / ((double) This->m_progressClock[This->m_clockHand].ullMark);
 
-                StrFromTimeIntervalW(This->m_lines[2], 128, timeLeftD * 0.3 + timeLeftI * 0.7 , 2);
+                StrFromTimeIntervalW(This->m_strings[2], 128, timeLeftD * 0.3 + timeLeftI * 0.7 , 2);
                 This->update_dialog( UPDATE_LINE1 << 2 );
             }
 
@@ -312,7 +312,7 @@ HRESULT WINAPI CProgressDialog::SetTitle(LPCWSTR pwzTitle)
     HWND hwnd;
 
     m_cs.Lock();
-    set_buffer(m_title, pwzTitle);
+    set_buffer(m_strings[TITLE_INDEX], pwzTitle);
     m_dwUpdate |= UPDATE_TITLE;
     hwnd = m_hwnd;
     m_cs.Unlock();
@@ -382,7 +382,7 @@ HRESULT WINAPI CProgressDialog::SetLine(DWORD dwLineNum, LPCWSTR pwzLine, BOOL b
         dwLineNum = 0;
 
     m_cs.Lock();
-    set_buffer(m_lines[dwLineNum], pwzLine);
+    set_buffer(m_strings[dwLineNum], pwzLine);
     m_dwUpdate |= UPDATE_LINE1 << dwLineNum;
     hwnd = (m_isCancelled ? NULL : m_hwnd); /* no sense to send the message if window cancelled */
     m_cs.Unlock();
@@ -401,7 +401,7 @@ HRESULT WINAPI CProgressDialog::SetCancelMsg(LPCWSTR pwzMsg, LPCVOID reserved)
         FIXME("reserved pointer not null (%p)\n", reserved);
 
     m_cs.Lock();
-    set_buffer(m_cancelMsg, pwzMsg);
+    set_buffer(m_strings[CANCEL_MSG_INDEX], pwzMsg);
     m_dwUpdate |= UPDATE_LINE1 << CANCEL_MSG_LINE;
     hwnd = (m_isCancelled ? m_hwnd : NULL); /* no sense to send the message if window not cancelled */
     m_cs.Unlock();
