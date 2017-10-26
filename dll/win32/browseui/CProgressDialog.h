@@ -28,7 +28,7 @@ class CProgressDialog :
     public IOleWindow
 {
 public:
-    CRITICAL_SECTION m_cs;
+    CComCriticalSection m_cs;
     HWND m_hwnd;
     DWORD m_dwFlags;
     DWORD m_dwUpdate;

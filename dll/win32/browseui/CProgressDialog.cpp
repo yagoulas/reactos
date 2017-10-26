@@ -57,7 +57,7 @@ CProgressDialog::CProgressDialog()
     m_progressClock[29].ullMark = 0ull;
     m_dwStartTime = GetTickCount();
 
-    InitializeCriticalSection(&m_cs);
+    m_cs.Init();
 }
 
 CProgressDialog::~CProgressDialog()
@@ -69,7 +69,7 @@ CProgressDialog::~CProgressDialog()
     HeapFree(GetProcessHeap(), 0, m_lines[2]);
     HeapFree(GetProcessHeap(), 0, m_cancelMsg);
     HeapFree(GetProcessHeap(), 0, m_title);
-    DeleteCriticalSection(&m_cs);
+    m_cs.Term();
 }
 
 static void set_buffer(LPWSTR *buffer, LPCWSTR string)
@@ -182,12 +182,12 @@ static INT_PTR CALLBACK dialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
 
         case WM_DLG_UPDATE:
-            EnterCriticalSection(&This->m_cs);
+        {
+            CComCritSecLock<CComCriticalSection> lock(This->m_cs, true);
             This->update_dialog(This->m_dwUpdate);
             This->m_dwUpdate = 0;
-            LeaveCriticalSection(&This->m_cs);
             return TRUE;
-
+        }
         case WM_DLG_DESTROY:
             DestroyWindow(hwnd);
             PostThreadMessageW(GetCurrentThreadId(), WM_NULL, 0, 0); /* wake up the GetMessage */
@@ -199,7 +199,7 @@ static INT_PTR CALLBACK dialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         case WM_COMMAND:
             if (msg == WM_CLOSE || wParam == IDCANCEL)
             {
-                EnterCriticalSection(&This->m_cs);
+                CComCritSecLock<CComCriticalSection> lock(This->m_cs, true);
                 This->m_isCancelled = TRUE;
 
                 if (!This->m_cancelMsg[0]) {
@@ -209,12 +209,12 @@ static INT_PTR CALLBACK dialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 This->set_progress_marquee();
                 EnableWindow(GetDlgItem(This->m_hwnd, IDCANCEL), FALSE);
                 This->update_dialog(UPDATE_LINE1|UPDATE_LINE2|UPDATE_LINE3);
-                LeaveCriticalSection(&This->m_cs);
             }
             return TRUE;
 
         case WM_TIMER:
-            EnterCriticalSection(&This->m_cs);
+        {
+            CComCritSecLock<CComCriticalSection> lock(This->m_cs, true);
             if (This->m_progressClock[29].ullMark != 0ull) {
                 // We have enough info to take a guess
                 ULONGLONG sizeDiff = This->m_progressClock[This->m_clockHand].ullMark - 
@@ -233,9 +233,9 @@ static INT_PTR CALLBACK dialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 StrFromTimeIntervalW(This->m_lines[2], 128, timeLeftD * 0.3 + timeLeftI * 0.7 , 2);
                 This->update_dialog( UPDATE_LINE1 << 2 );
             }
-            LeaveCriticalSection(&This->m_cs);
 
             return TRUE;
+        }
     }
     return FALSE;
 }
@@ -285,13 +285,11 @@ HRESULT WINAPI CProgressDialog::StartProgressDialog(HWND hwndParent, IUnknown *p
 
     InitCommonControlsEx( &init );
 
-    EnterCriticalSection(&m_cs);
+    CComCritSecLock<CComCriticalSection> lock(m_cs, true);
 
     if (m_hwnd)
-    {
-        LeaveCriticalSection(&m_cs);
         return S_OK;  /* as on XP */
-    }
+
     m_dwFlags = dwFlags;
     params.This = this;
     params.hwndParent = hwndParent;
@@ -310,17 +308,14 @@ HRESULT WINAPI CProgressDialog::StartProgressDialog(HWND hwndParent, IUnknown *p
             m_hwndDisabledParent = hwndDisable;
     }
 
-    LeaveCriticalSection(&m_cs);
-
     return S_OK;
 }
 
 HRESULT WINAPI CProgressDialog::StopProgressDialog()
 {
-    EnterCriticalSection(&m_cs);
+    CComCritSecLock<CComCriticalSection> lock(m_cs, true);
     if (m_hwnd)
         end_dialog();
-    LeaveCriticalSection(&m_cs);
 
     return S_OK;
 }
@@ -329,11 +324,11 @@ HRESULT WINAPI CProgressDialog::SetTitle(LPCWSTR pwzTitle)
 {
     HWND hwnd;
 
-    EnterCriticalSection(&m_cs);
+    m_cs.Lock();
     set_buffer(&m_title, pwzTitle);
     m_dwUpdate |= UPDATE_TITLE;
     hwnd = m_hwnd;
-    LeaveCriticalSection(&m_cs);
+    m_cs.Unlock();
 
     if (hwnd)
         SendMessageW(hwnd, WM_DLG_UPDATE, 0, 0);
@@ -362,11 +357,12 @@ HRESULT WINAPI CProgressDialog::SetProgress64(ULONGLONG ullCompleted, ULONGLONG 
 {    
     HWND hwnd;
 
-    EnterCriticalSection(&m_cs);
+    m_cs.Lock();
     m_ullTotal = ullTotal;
     m_ullCompleted = ullCompleted;
 
-    if (GetTickCount() - m_progressClock[(m_clockHand + 29) % 30].dwTime > 20) {
+    if (GetTickCount() - m_progressClock[(m_clockHand + 29) % 30].dwTime > 20)
+    {
         m_clockHand = (m_clockHand + 1) % 30;
         m_progressClock[m_clockHand].ullMark = ullCompleted;
         m_progressClock[m_clockHand].dwTime = GetTickCount();
@@ -374,7 +370,7 @@ HRESULT WINAPI CProgressDialog::SetProgress64(ULONGLONG ullCompleted, ULONGLONG 
 
     m_dwUpdate |= UPDATE_PROGRESS;
     hwnd = m_hwnd;
-    LeaveCriticalSection(&m_cs);
+    m_cs.Unlock();
 
     if (hwnd)
         SendMessageW(hwnd, WM_DLG_UPDATE, 0, 0);
@@ -398,11 +394,11 @@ HRESULT WINAPI CProgressDialog::SetLine(DWORD dwLineNum, LPCWSTR pwzLine, BOOL b
     if (dwLineNum >= 3)  /* Windows seems to do something like that */
         dwLineNum = 0;
 
-    EnterCriticalSection(&m_cs);
+    m_cs.Lock();
     set_buffer(&m_lines[dwLineNum], pwzLine);
     m_dwUpdate |= UPDATE_LINE1 << dwLineNum;
     hwnd = (m_isCancelled ? NULL : m_hwnd); /* no sense to send the message if window cancelled */
-    LeaveCriticalSection(&m_cs);
+    m_cs.Unlock();
 
     if (hwnd)
         SendMessageW(hwnd, WM_DLG_UPDATE, 0, 0);
@@ -417,11 +413,11 @@ HRESULT WINAPI CProgressDialog::SetCancelMsg(LPCWSTR pwzMsg, LPCVOID reserved)
     if (reserved)
         FIXME("reserved pointer not null (%p)\n", reserved);
 
-    EnterCriticalSection(&m_cs);
+    m_cs.Lock();
     set_buffer(&m_cancelMsg, pwzMsg);
     m_dwUpdate |= UPDATE_LINE1 << CANCEL_MSG_LINE;
     hwnd = (m_isCancelled ? m_hwnd : NULL); /* no sense to send the message if window not cancelled */
-    LeaveCriticalSection(&m_cs);
+    m_cs.Unlock();
 
     if (hwnd)
         SendMessageW(hwnd, WM_DLG_UPDATE, 0, 0);
@@ -439,9 +435,8 @@ HRESULT WINAPI CProgressDialog::Timer(DWORD dwTimerAction, LPCVOID reserved)
 
 HRESULT WINAPI CProgressDialog::GetWindow(HWND* phwnd)
 {
-    EnterCriticalSection(&m_cs);
+    CComCritSecLock<CComCriticalSection> lock(m_cs, true);
     *phwnd = m_hwnd;
-    LeaveCriticalSection(&m_cs);
     return S_OK;
 }
 
