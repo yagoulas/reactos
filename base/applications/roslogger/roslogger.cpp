@@ -1,13 +1,9 @@
-#define WIN32_NO_STATUS
 #include <windef.h>
 #include <winbase.h>
 #include <psapi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
-
-#define NTOS_MODE_USER
-#include <ndk/psfuncs.h>
 
 class BaseDebugger
 {
@@ -27,6 +23,10 @@ public:
         else if (evt.dwDebugEventCode == LOAD_DLL_DEBUG_EVENT)
         {
             close_handle = evt.u.LoadDll.hFile;
+        }
+        else if (evt.dwDebugEventCode == EXCEPTION_DEBUG_EVENT)
+        {
+            return DBG_EXCEPTION_NOT_HANDLED;
         }
 
         if (close_handle)
@@ -133,10 +133,10 @@ private:
         if (evt.dwDebugEventCode == LOAD_DLL_DEBUG_EVENT)
         {
             HANDLE hFileMapping = CreateFileMappingA(evt.u.LoadDll.hFile, NULL, PAGE_READONLY, 0, 0, "temp");
-            /*HANDLE hView = */MapViewOfFile(hFileMapping, FILE_MAP_READ, 0, 0, 0);
+            HANDLE hView = MapViewOfFile(hFileMapping, FILE_MAP_READ, 0, 0, 0);
             char fileName[MAX_PATH];
             /*DWORD length = */GetMappedFileNameA(mProcess, evt.u.LoadDll.lpBaseOfDll, fileName, MAX_PATH);
-            UnmapViewOfFile(0);
+            UnmapViewOfFile(hView);
             CloseHandle(hFileMapping);
             log_message(L"Loaded dll: ");
             log_message(fileName);
@@ -191,7 +191,7 @@ public:
 
 int wmain(int argc, WCHAR **argv)
 {
-    DWORD pid = 0;
+    DWORD pid = 0, tid = 0;
     bool resume = false;
     WCHAR* output = NULL;
 
@@ -209,6 +209,12 @@ int wmain(int argc, WCHAR **argv)
         else if (!wcscmp(arg, L"-r"))
         {
             resume = true;
+            if (n + 1 < argc)
+            {
+                tid = wcstoul(argv[n+1], NULL, 10);
+                n++;
+            }
+
         }
         else if (!wcscmp(arg, L"-o"))
         {
@@ -233,9 +239,9 @@ int wmain(int argc, WCHAR **argv)
     
     if (resume == true)
     {
-        HANDLE processHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
-        NtResumeProcess(processHandle);
-        CloseHandle(processHandle);
+        HANDLE threadHandle = OpenThread(THREAD_ALL_ACCESS , FALSE, tid);
+        ResumeThread(threadHandle);
+        CloseHandle(threadHandle);
     }
     
     DbgLogger debugger(output);
