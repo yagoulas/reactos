@@ -23,6 +23,7 @@
 #define IDC_LDRSNAPS    1012
 #define IDC_RUNAS       1013
 #define IDC_BROWSE      1014
+#define IDC_BROWSELOG   1015
 
 #define IDC_ADD         1020
 #define IDC_EDIT        1021
