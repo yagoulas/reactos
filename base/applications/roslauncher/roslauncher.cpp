@@ -19,6 +19,8 @@ END_OBJECT_MAP()
 CLauncherModule gModule;
 CAtlWinModule gWinModule;
 
+const WCHAR *ImageExecOptionsString = L"Software\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\";
+
 class CLauncher
 {
 public:
@@ -30,7 +32,6 @@ public:
     bool bLogToConsole;
     DWORD gflags;
 
-    WCHAR* ImageExecOptionsString = L"Software\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\";
 
     bool Launch()
     {
@@ -38,6 +39,8 @@ public:
 
         WCHAR loggerparams[MAX_PATH];
         DWORD dwCreationFlags = bLogToConsole == true ? 0 : DETACHED_PROCESS;
+        const WCHAR *pStartDir = strStartDir.GetLength() == 0 ? NULL : strStartDir.GetString();
+
         if (bLogToFile == true)
             wsprintf(loggerparams, L"roslogger.exe -c \"%s %s\" -o %s", strExecutable.GetString(), strParams.GetString(), strLogFileName.GetString());
         else
@@ -47,7 +50,7 @@ public:
         STARTUPINFOW si2 = { 0 };
 
         BOOL ret = CreateProcessW(NULL, loggerparams, NULL, NULL, FALSE, dwCreationFlags, NULL, 
-                             strStartDir.GetString(), &si2, &pi2);
+                             pStartDir, &si2, &pi2);
         if (!ret)
         {
             WCHAR buffer[200];
@@ -61,40 +64,49 @@ public:
         return true;
     }
 
+    CStringW GetFileName()
+    {
+        CStringW FileName;
+        int i = strExecutable.ReverseFind(L'\\');
+        if (i != -1)
+            FileName = strExecutable.Right(strExecutable.GetLength() - i - 1);
+        return FileName;
+    }
+
     void ReadGFlags()
     {
-        int i = strExecutable.ReverseFind(L'\\');
-        if (i == -1)
-            return;
-
-        CStringW FileName = strExecutable.Right(strExecutable.GetLength() - i - 1);
-        if (FileName.GetLength() <= 0)
-            return;
-
-        RegQueryValue(HKEY_LOCAL_MACHINE, ImageExecOptionsString + FileName, L"GlobalFlag", (PLONG)&gflags);
+        gflags = 0;
+        CStringW filename = GetFileName();
+        if (filename.GetLength() > 0)
+        {
+            CRegKey key1, key2;
+            if (key1.Open(HKEY_LOCAL_MACHINE, ImageExecOptionsString) == ERROR_SUCCESS)
+            {
+                if (key2.Open(key1, filename.GetString(), KEY_READ) == ERROR_SUCCESS)
+                    key2.QueryDWORDValue(L"GlobalFlag", gflags);
+            }
+        }
     }
 
     void WriteGFlags()
     {
-        int i = strExecutable.ReverseFind(L'\\');
-        if (i == -1)
-            return;
-
-        CStringW FileName = strExecutable.Right(strExecutable.GetLength() - i - 1);
-        if (FileName.GetLength() <= 0)
-            return;
-
-        HKEY hkey;
-        LONG res = RegOpenKey(HKEY_LOCAL_MACHINE, ImageExecOptionsString + FileName, &hkey);
-        if (res != ERROR_SUCCESS)
+        CStringW filename = GetFileName();
+        if (filename.GetLength() > 0)
         {
-            if (gflags == 0)
-                return;
-            res = RegCreateKey(HKEY_LOCAL_MACHINE, ImageExecOptionsString + FileName, &hkey);
-            if (res != ERROR_SUCCESS)
-                return;
+            CRegKey key1, key2;
+            if (key1.Open(HKEY_LOCAL_MACHINE, ImageExecOptionsString) == ERROR_SUCCESS)
+            {
+                if (key2.Open(key1, filename.GetString(), KEY_WRITE) != ERROR_SUCCESS)
+                {
+                    if (gflags == 0)
+                        return;
+
+                    if (key2.Create(HKEY_LOCAL_MACHINE,filename.GetString()) != ERROR_SUCCESS)
+                        return;
+                }        
+                key2.SetDWORDValue(L"GlobalFlag", gflags);
+            }
         }
-        RegSetValueEx(hkey, L"GlobalFlag", NULL, REG_DWORD, (BYTE*)&gflags, sizeof(DWORD));
     }
 
 };
@@ -106,10 +118,14 @@ private:
 public: 
     enum { IDD = IDD_LAUNCHER_MAIN };
 
+    const static UINT TimerId = 200;
+
     BEGIN_MSG_MAP(CMainPage)
         MESSAGE_HANDLER(WM_INITDIALOG, OnInitDialog)
+        MESSAGE_HANDLER(WM_TIMER, OnTimer)
         COMMAND_ID_HANDLER(IDC_BROWSE, OnBrowse)
         COMMAND_ID_HANDLER(IDC_BROWSELOG, OnBrowseLog)
+        COMMAND_CODE_HANDLER(EN_CHANGE , OnEditChange)
         CHAIN_MSG_MAP(CPropertyPageImpl<CMainPage>)
     END_MSG_MAP()
 
@@ -152,6 +168,29 @@ public:
         return 0;
     }
 
+    LRESULT OnEditChange(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL &bHandled)
+    {
+        if (hWndCtl == GetDlgItem(IDC_EXECUTABLE))
+        {    
+            SetTimer(TimerId, 300);
+        }
+        return 0;
+    }
+
+    LRESULT OnTimer(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled)
+    {
+        if (wParam == TimerId)
+        {
+            KillTimer(TimerId);
+            GetDlgItemText(IDC_EXECUTABLE, m_launcher->strExecutable.GetBuffer(MAX_PATH), MAX_PATH);
+            m_launcher->strExecutable.ReleaseBuffer();
+            m_launcher->ReadGFlags();
+            CheckDlgButton(IDC_LDRSNAPS, (m_launcher->gflags & 2) ? BST_CHECKED : 0);
+            CheckDlgButton(IDC_DPH, (m_launcher->gflags & 0x02000000) ? BST_CHECKED : 0);
+        }
+        return 0;
+    }
+
     LRESULT OnInitDialog(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled)
     {
         m_launcher->ReadGFlags();
@@ -167,11 +206,8 @@ public:
         else if (m_launcher->bLogToConsole == true)
             CheckDlgButton(IDC_LOGTOCON, BST_CHECKED);
 
-        if (m_launcher->gflags & 2)
-            CheckDlgButton(IDC_LDRSNAPS, BST_CHECKED);
-
-        if (m_launcher->gflags & 0x02000000)
-            CheckDlgButton(IDC_DPH, BST_CHECKED);
+        CheckDlgButton(IDC_LDRSNAPS, (m_launcher->gflags & 2) ? BST_CHECKED : 0);
+        CheckDlgButton(IDC_DPH, (m_launcher->gflags & 0x02000000) ? BST_CHECKED : 0);
 
         return TRUE;
     }
