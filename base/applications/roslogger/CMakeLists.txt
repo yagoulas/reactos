@@ -1,3 +1,5 @@
+project(roslauncher)
+
 set_cpp(WITH_RUNTIME)
 
 add_executable(roslogger roslogger.cpp roslogger.rc)
