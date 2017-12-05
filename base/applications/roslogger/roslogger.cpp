@@ -5,6 +5,7 @@
 #include <psapi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <conio.h>
 #include <wchar.h>
 
 #define NTOS_MODE_USER
@@ -201,7 +202,7 @@ int wmain(int argc, WCHAR **argv)
     DWORD pid = 0;
     WCHAR* output = NULL;
     WCHAR* cmd = NULL;
-    
+
     for (int n = 0; n < argc; ++n)
     {
         WCHAR* arg = argv[n];
@@ -250,8 +251,15 @@ int wmain(int argc, WCHAR **argv)
     {
         int ret = debugger.run(cmd, NULL);
         if (!ret)
+        {
             printf ("CreateProcessW failed, ret:%d, error:%d\n", ret, GetLastError());
+            return 0;
+        }
     }
+
+    printf("Log written to %ls\nPress any key to exit\n", output);
+    fflush(stdin);
+    _getch();
 
     return 0;
 }
