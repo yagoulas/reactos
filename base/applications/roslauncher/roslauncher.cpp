@@ -19,7 +19,7 @@ END_OBJECT_MAP()
 CLauncherModule gModule;
 CAtlWinModule gWinModule;
 
-class Launcher
+class CLauncher
 {
 public:
     CStringW strExecutable;
@@ -28,38 +28,73 @@ public:
     CStringW strLogFileName;
     bool bLogToFile;
     bool bLogToConsole;
+    DWORD gflags;
+
+    WCHAR* ImageExecOptionsString = L"Software\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\";
 
     bool Launch()
     {
-        PROCESS_INFORMATION pi;
-        STARTUPINFOW si = { 0 };
-        BOOL ret;
-
-        ret = CreateProcessW(strExecutable.GetString(), 
-                             (LPWSTR)strParams.GetString(), NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, 
-                             strStartDir.GetString(), &si, &pi);
-        if (!ret)
-            return ret;
+        WriteGFlags();
 
         WCHAR loggerparams[MAX_PATH];
         DWORD dwCreationFlags = bLogToConsole == true ? 0 : DETACHED_PROCESS;
         if (bLogToFile == true)
-            wsprintf(loggerparams, L"-p %d -r %d -o %s", pi.dwProcessId, pi.dwThreadId, strLogFileName.GetString());
+            wsprintf(loggerparams, L"roslogger.exe -c \"%s %s\" -o %s", strExecutable.GetString(), strParams.GetString(), strLogFileName.GetString());
         else
-            wsprintf(loggerparams, L"-p %d -r %d", pi.dwProcessId, pi.dwThreadId);
+            wsprintf(loggerparams, L"roslogger.exe -c \"%s %s\"", strExecutable.GetString(), strParams.GetString());
 
         PROCESS_INFORMATION pi2;
         STARTUPINFOW si2 = { 0 };
 
-        ret = CreateProcessW(L"roslogger.exe", loggerparams, NULL, NULL, FALSE, dwCreationFlags, NULL, 
-                             NULL, &si2, &pi2);
+        BOOL ret = CreateProcessW(NULL, loggerparams, NULL, NULL, FALSE, dwCreationFlags, NULL, 
+                             strStartDir.GetString(), &si2, &pi2);
+        if (!ret)
+        {
+            WCHAR buffer[200];
+            wsprintf(buffer, L"CreateProcessW failed. ret = %d, last error: %d\n", ret, GetLastError());
+            MessageBoxW(NULL, buffer, L"Error", 0);
+        }
 
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
         CloseHandle(pi2.hThread);
         CloseHandle(pi2.hProcess);
 
         return true;
+    }
+
+    void ReadGFlags()
+    {
+        int i = strExecutable.ReverseFind(L'\\');
+        if (i == -1)
+            return;
+
+        CStringW FileName = strExecutable.Right(strExecutable.GetLength() - i - 1);
+        if (FileName.GetLength() <= 0)
+            return;
+
+        RegQueryValue(HKEY_LOCAL_MACHINE, ImageExecOptionsString + FileName, L"GlobalFlag", (PLONG)&gflags);
+    }
+
+    void WriteGFlags()
+    {
+        int i = strExecutable.ReverseFind(L'\\');
+        if (i == -1)
+            return;
+
+        CStringW FileName = strExecutable.Right(strExecutable.GetLength() - i - 1);
+        if (FileName.GetLength() <= 0)
+            return;
+
+        HKEY hkey;
+        LONG res = RegOpenKey(HKEY_LOCAL_MACHINE, ImageExecOptionsString + FileName, &hkey);
+        if (res != ERROR_SUCCESS)
+        {
+            if (gflags == 0)
+                return;
+            res = RegCreateKey(HKEY_LOCAL_MACHINE, ImageExecOptionsString + FileName, &hkey);
+            if (res != ERROR_SUCCESS)
+                return;
+        }
+        RegSetValueEx(hkey, L"GlobalFlag", NULL, REG_DWORD, (BYTE*)&gflags, sizeof(DWORD));
     }
 
 };
@@ -67,7 +102,7 @@ public:
 class CMainPage : public CPropertyPageImpl<CMainPage>
 {
 private:
-    Launcher *m_launcher;
+    CLauncher *m_launcher;
 public: 
     enum { IDD = IDD_LAUNCHER_MAIN };
 
@@ -119,6 +154,8 @@ public:
 
     LRESULT OnInitDialog(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled)
     {
+        m_launcher->ReadGFlags();
+
         SetDlgItemText(IDC_EXECUTABLE, m_launcher->strExecutable);
         SetDlgItemText(IDC_PARAMS, m_launcher->strParams);
         SetDlgItemText(IDC_LOGFILE, m_launcher->strLogFileName);
@@ -129,6 +166,12 @@ public:
             CheckDlgButton(IDC_LOGTOFILE, BST_CHECKED);
         else if (m_launcher->bLogToConsole == true)
             CheckDlgButton(IDC_LOGTOCON, BST_CHECKED);
+
+        if (m_launcher->gflags & 2)
+            CheckDlgButton(IDC_LDRSNAPS, BST_CHECKED);
+
+        if (m_launcher->gflags & 0x02000000)
+            CheckDlgButton(IDC_DPH, BST_CHECKED);
 
         return TRUE;
     }
@@ -154,10 +197,20 @@ public:
             m_launcher->bLogToConsole = IsDlgButtonChecked(IDC_LOGTOCON);
         }
 
+        if (IsDlgButtonChecked(IDC_DPH))
+            m_launcher->gflags |= 0x02000000;
+        else
+            m_launcher->gflags &= ~0x02000000;
+
+        if (IsDlgButtonChecked(IDC_LDRSNAPS))
+            m_launcher->gflags |= 2;
+        else
+            m_launcher->gflags &= ~2;
+
         return PSNRET_NOERROR;
     }    
     
-    CMainPage(Launcher *launcher):
+    CMainPage(CLauncher *launcher):
         m_launcher(launcher)
     {
     }
@@ -167,11 +220,11 @@ public:
 class CEnvironmentPage : public CPropertyPageImpl<CEnvironmentPage>
 {
 private:
-    Launcher *m_launcher;
+    CLauncher *m_launcher;
 public: 
     enum { IDD = IDD_LAUNCHERS_ENVIRONMENT };
 
-    CEnvironmentPage(Launcher *launcher):
+    CEnvironmentPage(CLauncher *launcher):
         m_launcher(launcher)
     {
             
@@ -181,11 +234,11 @@ public:
 class CChannelsPage : public CPropertyPageImpl<CChannelsPage>
 {
 private:
-    Launcher *m_launcher;
+    CLauncher *m_launcher;
 public: 
     enum { IDD = IDD_LAUNCHER_CHANNELS };
 
-    CChannelsPage(Launcher *launcher):
+    CChannelsPage(CLauncher *launcher):
         m_launcher(launcher)
     {
             
@@ -202,7 +255,7 @@ int CALLBACK PropSheetProc(HWND hwndDlg, UINT uMsg, LPARAM lParam)
     return 0;
 }
 
-static bool EditLaucherSettings(Launcher *launcher)
+static bool EditLaucherSettings(CLauncher *launcher)
 {
     CMainPage mainPage(launcher);
     CEnvironmentPage envPage(launcher);
@@ -227,7 +280,7 @@ INT WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     gModule.Init(ObjectMap, hInstance, NULL);
     InitCommonControls();
 
-    Launcher launcher;
+    CLauncher launcher;
 
     if (lpCmdLine && lpCmdLine[0])
         launcher.strExecutable = lpCmdLine;
