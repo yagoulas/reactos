@@ -253,6 +253,43 @@ public:
     
 };
 
+class CEditDialog : public CDialogImpl<CEditDialog>
+{
+private:
+    CStringW m_ValueType;
+public:
+    CStringW m_Value, m_ValueName;
+    enum { IDD = IDD_EDIT_VALUE };
+
+    BEGIN_MSG_MAP(CEditDialog)
+        MESSAGE_HANDLER(WM_INITDIALOG, OnInitDialog)
+        COMMAND_ID_HANDLER(IDOK, OnOk)
+    END_MSG_MAP()
+
+    CEditDialog(CStringW ValueType, CStringW ValueName, CStringW Value):
+        m_ValueType(ValueType), m_ValueName(ValueName), m_Value(Value)
+    {
+    }
+
+    LRESULT OnInitDialog(UINT nMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+    {
+        WCHAR buffer[100];
+        GetWindowText(buffer, 100);
+        wcscat(buffer, m_ValueType.GetString());
+        SetWindowText(buffer);
+        SetDlgItemText(IDC_VALUE_NAME, m_ValueName);
+        SetDlgItemText(IDC_VALUE_DATA, m_Value);
+    }
+
+    LRESULT OnOk(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL& bHandled)
+    {
+        GetDlgItemText(IDC_VALUE_NAME, m_ValueName.GetBuffer(MAX_PATH), MAX_PATH);
+        m_ValueName.ReleaseBuffer();
+        GetDlgItemText(IDC_VALUE_DATA, m_Value.GetBuffer(MAX_PATH), MAX_PATH);
+        m_Value.ReleaseBuffer();
+    }
+};
+
 class CEnvironmentPage : public CPropertyPageImpl<CEnvironmentPage>
 {
 private:
