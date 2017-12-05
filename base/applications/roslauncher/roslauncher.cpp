@@ -5,6 +5,7 @@
 #include <atlcom.h>
 #include <atlwin.h>
 #include <atlstr.h>
+#include <atlsimpcoll.h>
 #include <rosdlgs.h>
 #include "resource.h"
 
@@ -264,6 +265,7 @@ public:
     BEGIN_MSG_MAP(CEditDialog)
         MESSAGE_HANDLER(WM_INITDIALOG, OnInitDialog)
         COMMAND_ID_HANDLER(IDOK, OnOk)
+        COMMAND_ID_HANDLER(IDCANCEL, OnCancel)
     END_MSG_MAP()
 
     CEditDialog(CStringW ValueType, CStringW ValueName, CStringW Value):
@@ -279,6 +281,13 @@ public:
         SetWindowText(buffer);
         SetDlgItemText(IDC_VALUE_NAME, m_ValueName);
         SetDlgItemText(IDC_VALUE_DATA, m_Value);
+        return 0;
+    }
+
+    LRESULT OnCancel(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL& bHandled)
+    {
+        EndDialog(FALSE);
+        return 0;
     }
 
     LRESULT OnOk(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL& bHandled)
@@ -287,6 +296,70 @@ public:
         m_ValueName.ReleaseBuffer();
         GetDlgItemText(IDC_VALUE_DATA, m_Value.GetBuffer(MAX_PATH), MAX_PATH);
         m_Value.ReleaseBuffer();
+        EndDialog(TRUE);
+        return 0;
+    }
+};
+
+struct ListItem
+{
+    CStringW Value;
+    CStringW ValueName;
+};
+
+class CListEditor: CWindow
+{
+private:
+    CStringW m_ValueType;
+
+public:
+    CSimpleArray<ListItem> m_items;
+
+    void Init(HWND hWnd, CSimpleArray<ListItem> items, CStringW ValueType)
+    {
+        m_ValueType = ValueType;
+        m_items = items;
+        m_hWnd = hWnd;
+        for (int i = 0; i < m_items.GetSize(); i++)
+            AddItem(m_items[i], FALSE);
+
+        int tabstop = 100;
+        SendMessageW(LB_SETTABSTOPS, 1, (LPARAM)&tabstop);
+    }
+
+    void AddItem(ListItem& item, BOOL bAddToList = TRUE, int index = -1)
+    {
+        if (bAddToList)
+            m_items.Add(item);
+
+        CStringW itemstr = item.ValueName;
+        itemstr += L'\t';
+        itemstr += item.Value;
+        SendMessageW(LB_INSERTSTRING , index, (LPARAM)itemstr.GetString());
+    }
+
+    void RemoveItem()
+    {
+        int i = SendMessageW(LB_GETCURSEL, 0, 0);
+        if (i < 0)
+            return;
+        m_items.RemoveAt(i);
+        SendMessageW(LB_DELETESTRING, i, NULL);
+    }
+
+    void EditItem()
+    {
+        int i = SendMessageW(LB_GETCURSEL, 0, 0);
+        if (i < 0)
+            return;
+        CEditDialog editor(m_ValueType, m_items[i].ValueName, m_items[i].Value);
+        if (editor.DoModal(m_hWnd))
+        {
+            m_items[i].ValueName = editor.m_ValueName;
+            m_items[i].Value = editor.m_Value;
+            SendMessageW(LB_DELETESTRING, i, NULL);
+            AddItem(m_items[i], FALSE, i);
+        }
     }
 };
 
@@ -308,13 +381,69 @@ class CChannelsPage : public CPropertyPageImpl<CChannelsPage>
 {
 private:
     CLauncher *m_launcher;
+    CListEditor m_editor;
+    CSimpleArray<ListItem> m_items;
+
 public: 
     enum { IDD = IDD_LAUNCHER_CHANNELS };
 
     CChannelsPage(CLauncher *launcher):
         m_launcher(launcher)
     {
-            
+    }
+
+    BEGIN_MSG_MAP(CChannelsPage)
+        MESSAGE_HANDLER(WM_INITDIALOG, OnInitDialog)
+        COMMAND_ID_HANDLER(IDC_ADD, OnAdd)
+        COMMAND_ID_HANDLER(IDC_EDIT, OnEdit)
+        COMMAND_ID_HANDLER(IDC_REMOVE, OnRemove)
+        COMMAND_CODE_HANDLER(LBN_DBLCLK , OnEdit)
+        CHAIN_MSG_MAP(CPropertyPageImpl<CChannelsPage>)
+    END_MSG_MAP()
+
+    LRESULT OnInitDialog(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled)
+    {
+        m_editor.Init(GetDlgItem(IDC_CHNLLIST), m_items, L"debug channel");
+        SetModified();
+        return TRUE;
+    }
+
+    LRESULT OnAdd(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL &bHandled)
+    {
+        ListItem newitem;
+        GetDlgItemText(IDC_NEWCHNL, newitem.ValueName.GetBuffer(MAX_PATH), MAX_PATH);
+        newitem.ValueName.ReleaseBuffer();
+		newitem.Value = L"+";
+        m_editor.AddItem(newitem);
+        return 0;
+    }
+
+    LRESULT OnEdit(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL &bHandled)
+    {
+        m_editor.EditItem();
+        return 0;
+    }
+
+    LRESULT OnRemove(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL &bHandled)
+    {
+        m_editor.RemoveItem();
+        return 0;
+    }
+
+    int OnApply()
+    {
+        CStringW channelsstr;
+        m_items = m_editor.m_items;
+        for (int i = 0; i < m_items.GetSize(); i++)
+        {
+			channelsstr += m_items[i].Value;
+			channelsstr += m_items[i].ValueName;
+            channelsstr += L',';
+        }
+
+        MessageBoxW(channelsstr.GetString(), L"Channels", 0);
+
+        return PSNRET_NOERROR;
     }
 };
 
