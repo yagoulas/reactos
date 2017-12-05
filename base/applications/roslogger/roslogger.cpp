@@ -1,9 +1,14 @@
+#define WIN32_NO_STATUS
+
 #include <windef.h>
 #include <winbase.h>
 #include <psapi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
+
+#define NTOS_MODE_USER
+#include <ndk/psfuncs.h>
 
 class BaseDebugger
 {
@@ -23,10 +28,6 @@ public:
         else if (evt.dwDebugEventCode == LOAD_DLL_DEBUG_EVENT)
         {
             close_handle = evt.u.LoadDll.hFile;
-        }
-        else if (evt.dwDebugEventCode == EXCEPTION_DEBUG_EVENT)
-        {
-            return DBG_EXCEPTION_NOT_HANDLED;
         }
 
         if (close_handle)
@@ -62,13 +63,13 @@ public:
         return ret;
     }
 
-    BOOL run(const char* process, char* cmdline)
+    BOOL run(const wchar_t* process, wchar_t* cmdline)
     {
         PROCESS_INFORMATION pi;
-        STARTUPINFOA si = { 0 };
+        STARTUPINFOW si = { 0 };
         BOOL ret;
 
-        ret = CreateProcessA(process, cmdline, NULL, NULL, FALSE, DEBUG_PROCESS, NULL, NULL, &si, &pi);
+        ret = CreateProcessW(process, cmdline, NULL, NULL, FALSE, DEBUG_PROCESS, NULL, NULL, &si, &pi);
         if (!ret)
             return ret;
 
@@ -79,6 +80,12 @@ public:
 
         return ret;
     }
+
+    void attach(DWORD pid)
+    {
+        DebugActiveProcess(pid);
+    }
+
     HANDLE mProcess;
 
 };
@@ -160,7 +167,7 @@ private:
     
     void log_message(char* buffer)
     {
-        printf("%s", buffer);
+        CaptureDbgOut::log_message(buffer);
         if (file)
         {
             fprintf(file, "%s", buffer);
@@ -170,7 +177,7 @@ private:
 
     void log_message(wchar_t* buffer)
     {
-        printf("%ls", buffer);
+        CaptureDbgOut::log_message(buffer);
         if (file)
         {
             fprintf(file, "%ls", buffer);
@@ -191,13 +198,14 @@ public:
 
 int wmain(int argc, WCHAR **argv)
 {
-    DWORD pid = 0, tid = 0;
-    bool resume = false;
+    DWORD pid = 0;
     WCHAR* output = NULL;
-
+    WCHAR* cmd = NULL;
+    
     for (int n = 0; n < argc; ++n)
     {
         WCHAR* arg = argv[n];
+
         if (!wcscmp(arg, L"-p"))
         {
             if (n + 1 < argc)
@@ -206,46 +214,44 @@ int wmain(int argc, WCHAR **argv)
                 n++;
             }
         }
-        else if (!wcscmp(arg, L"-r"))
-        {
-            resume = true;
-            if (n + 1 < argc)
-            {
-                tid = wcstoul(argv[n+1], NULL, 10);
-                n++;
-            }
-
-        }
         else if (!wcscmp(arg, L"-o"))
         {
             if (n + 1 < argc)
             {
                 output = argv[n+1];
-                printf("output file: %ls\n", output);
                 n++;
             }
-            
+        }
+        else if (!wcscmp(arg, L"-c"))
+        {
+            if (n + 1 < argc)
+            {
+                cmd = argv[n+1];
+                n++;
+            }
         }
     }
 
-    if (!pid)
+    if (!pid && !cmd)
     {
-        printf("Expected a process id\n");
+        printf("Expected a process id or a command\n");
         return 0;
     }
     
-    DebugActiveProcess(pid);
+    DbgLogger debugger(output);
     DebugSetProcessKillOnExit(FALSE);
     
-    if (resume == true)
+    if (pid)
     {
-        HANDLE threadHandle = OpenThread(THREAD_ALL_ACCESS , FALSE, tid);
-        ResumeThread(threadHandle);
-        CloseHandle(threadHandle);
+        debugger.attach(pid);
+        debugger.debugger_loop();
     }
-    
-    DbgLogger debugger(output);
-    debugger.debugger_loop();
-    
+    else
+    {
+        int ret = debugger.run(cmd, NULL);
+        if (!ret)
+            printf ("CreateProcessW failed, ret:%d, error:%d\n", ret, GetLastError());
+    }
+
     return 0;
 }
