@@ -1,14 +1,10 @@
 
-#define IDC_STATIC1 201
-#define IDC_STATIC2 202
-#define IDC_STATIC3 203
-#define IDC_STATIC4 204
-#define IDC_STATIC5 205
-#define IDC_STATIC6 206
+#define IDC_STATIC -1
 
 #define IDD_LAUNCHER_MAIN               106
 #define IDD_LAUNCHER_CHANNELS           107
-#define IDD_LAUNCHERS_ENVIRONMENT       108
+#define IDD_LAUNCHER_ENVIRONMENT        108
+#define IDD_EDIT_VALUE                  109
 
 #define IDC_EXECUTABLE  1001
 #define IDC_PARAMS      1002
@@ -32,3 +28,6 @@
 #define IDC_NEWVAR      1024
 #define IDC_ENVLIST     1025
 #define IDC_CHNLLIST    1026
+
+#define IDC_VALUE_NAME  1041
+#define IDC_VALUE_DATA  1042

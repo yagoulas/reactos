@@ -258,7 +258,7 @@ class CEnvironmentPage : public CPropertyPageImpl<CEnvironmentPage>
 private:
     CLauncher *m_launcher;
 public: 
-    enum { IDD = IDD_LAUNCHERS_ENVIRONMENT };
+    enum { IDD = IDD_LAUNCHER_ENVIRONMENT };
 
     CEnvironmentPage(CLauncher *launcher):
         m_launcher(launcher)
