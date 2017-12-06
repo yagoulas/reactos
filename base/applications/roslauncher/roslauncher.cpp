@@ -7,6 +7,8 @@
 #include <atlstr.h>
 #include <atlsimpcoll.h>
 #include <rosdlgs.h>
+#include <shlobj.h>
+#include <shellutils.h>
 #include <strsafe.h>
 #include "resource.h"
 
@@ -467,13 +469,16 @@ private:
     CLauncher *m_launcher;
     CListEditor m_editor;
     CSimpleArray<ListItem> m_items;
-
+    CComPtr<IAutoComplete> pAC;
+    CComPtr<IEnumString> pES;
 public: 
     enum { IDD = IDD_LAUNCHER_CHANNELS };
 
     CChannelsPage(CLauncher *launcher):
         m_launcher(launcher)
     {
+        CoCreateInstance(CLSID_AutoComplete, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARG(IAutoComplete, &pAC));
+        ShellObjectCreator<CChannelsStringList>(IID_PPV_ARG(IEnumString, &pES));
     }
 
     BEGIN_MSG_MAP(CChannelsPage)
@@ -488,6 +493,12 @@ public:
     LRESULT OnInitDialog(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled)
     {
         m_editor.Init(GetDlgItem(IDC_CHNLLIST), m_items, L"debug channel");
+        if (pAC && pES)
+        {
+            HWND hwndCombo = GetDlgItem(IDC_NEWCHNL);
+            HWND hwndEdit = ::GetWindow(hwndCombo, GW_CHILD);
+            pAC->Init(hwndEdit, pES, NULL, NULL);
+        }
         SetModified();
         return TRUE;
     }
