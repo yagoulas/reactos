@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <atlstr.h>
+
 #if defined(__GNUC__) || defined(__clang__)
 #define GCCU(x)    x __attribute__((unused))
 #define Unused(x)
