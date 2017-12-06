@@ -125,48 +125,40 @@ public:
         MESSAGE_HANDLER(WM_INITDIALOG, OnInitDialog)
         MESSAGE_HANDLER(WM_TIMER, OnTimer)
         COMMAND_ID_HANDLER(IDC_BROWSE, OnBrowse)
-        COMMAND_ID_HANDLER(IDC_BROWSELOG, OnBrowseLog)
+        COMMAND_ID_HANDLER(IDC_BROWSELOG, OnBrowse)
         COMMAND_CODE_HANDLER(EN_CHANGE , OnEditChange)
         CHAIN_MSG_MAP(CPropertyPageImpl<CMainPage>)
     END_MSG_MAP()
 
     LRESULT OnBrowse(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL &bHandled)
     {
-        CStringW strFileName = m_launcher->strExecutable.GetString();
+        WCHAR buffer[MAX_PATH];
+        if (wID == IDC_BROWSE)
+            wcscpy(buffer, m_launcher->strExecutable.GetString());
+        else
+            wcscpy(buffer, m_launcher->strLogFileName.GetString());
 
         OPENFILENAMEW ofn = {sizeof(ofn)};
         ofn.hwndOwner = m_hWnd;
         ofn.hInstance = _AtlBaseModule.GetModuleInstance();
         ofn.nMaxFile = MAX_PATH;
-        ofn.lpstrFile = strFileName.GetBuffer(ofn.nMaxFile);
-        strFileName.ReleaseBuffer();
+        ofn.lpstrFile = buffer;
 
-        ofn.lpstrFilter = L"Exe files (*.exe)\0*.exe\0All Files\0*.*\0\0";
-        ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-
-        if (GetOpenFileNameW(&ofn))
-            SetDlgItemText(IDC_EXECUTABLE, strFileName);
-
-        return 0;
-    }
-
-    LRESULT OnBrowseLog(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL &bHandled)
-    {
-        CStringW strFileName = m_launcher->strLogFileName.GetString();
-
-        OPENFILENAMEW ofn = {sizeof(ofn)};
-        ofn.hwndOwner = m_hWnd;
-        ofn.hInstance = _AtlBaseModule.GetModuleInstance();
-        ofn.nMaxFile = MAX_PATH;
-        ofn.lpstrFile = strFileName.GetBuffer(ofn.nMaxFile);
-        strFileName.ReleaseBuffer();
-
-        ofn.lpstrFilter = L"All Files\0*.*\0\0";
-        ofn.Flags = OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
-        if (GetSaveFileNameW(&ofn))
-            SetDlgItemText(IDC_LOGFILE, strFileName);
-
-        return 0;
+        if (wID == IDC_BROWSE)
+        {
+            ofn.lpstrFilter = L"Exe files (*.exe)\0*.exe\0All Files\0*.*\0\0";
+            ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+            if (GetOpenFileNameW(&ofn))
+                SetDlgItemText(IDC_EXECUTABLE, buffer);
+        }
+        else
+        {
+            ofn.lpstrFilter = L"All Files\0*.*\0\0";
+            ofn.Flags = OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
+            if (GetSaveFileNameW(&ofn))
+                SetDlgItemText(IDC_LOGFILE, buffer);
+        }
+         return 0;
     }
 
     LRESULT OnEditChange(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL &bHandled)
@@ -183,8 +175,7 @@ public:
         if (wParam == TimerId)
         {
             KillTimer(TimerId);
-            GetDlgItemText(IDC_EXECUTABLE, m_launcher->strExecutable.GetBuffer(MAX_PATH), MAX_PATH);
-            m_launcher->strExecutable.ReleaseBuffer();
+            GetDlgItemText(IDC_EXECUTABLE, m_launcher->strExecutable);
             m_launcher->ReadGFlags();
             CheckDlgButton(IDC_LDRSNAPS, (m_launcher->gflags & 2) ? BST_CHECKED : 0);
             CheckDlgButton(IDC_DPH, (m_launcher->gflags & 0x02000000) ? BST_CHECKED : 0);
@@ -215,14 +206,10 @@ public:
 
     int OnApply()
     {
-        GetDlgItemText(IDC_EXECUTABLE, m_launcher->strExecutable.GetBuffer(MAX_PATH), MAX_PATH);
-        m_launcher->strExecutable.ReleaseBuffer();
-        GetDlgItemText(IDC_PARAMS, m_launcher->strParams.GetBuffer(MAX_PATH), MAX_PATH);
-        m_launcher->strParams.ReleaseBuffer();
-        GetDlgItemText(IDC_LOGFILE, m_launcher->strLogFileName.GetBuffer(MAX_PATH), MAX_PATH);
-        m_launcher->strLogFileName.ReleaseBuffer();
-        GetDlgItemText(IDC_STARTDIR, m_launcher->strStartDir.GetBuffer(MAX_PATH), MAX_PATH);
-        m_launcher->strStartDir.ReleaseBuffer();
+        GetDlgItemText(IDC_EXECUTABLE, m_launcher->strExecutable);
+        GetDlgItemText(IDC_PARAMS, m_launcher->strParams);
+        GetDlgItemText(IDC_LOGFILE, m_launcher->strLogFileName);
+        GetDlgItemText(IDC_STARTDIR, m_launcher->strStartDir);
         
         if (IsDlgButtonChecked(IDC_LOGTOBOTH))
         {
@@ -292,10 +279,8 @@ public:
 
     LRESULT OnOk(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL& bHandled)
     {
-        GetDlgItemText(IDC_VALUE_NAME, m_ValueName.GetBuffer(MAX_PATH), MAX_PATH);
-        m_ValueName.ReleaseBuffer();
-        GetDlgItemText(IDC_VALUE_DATA, m_Value.GetBuffer(MAX_PATH), MAX_PATH);
-        m_Value.ReleaseBuffer();
+        GetDlgItemText(IDC_VALUE_NAME, m_ValueName);
+        GetDlgItemText(IDC_VALUE_DATA, m_Value);
         EndDialog(TRUE);
         return 0;
     }
@@ -411,8 +396,7 @@ public:
     LRESULT OnAdd(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL &bHandled)
     {
         ListItem newitem;
-        GetDlgItemText(IDC_NEWCHNL, newitem.ValueName.GetBuffer(MAX_PATH), MAX_PATH);
-        newitem.ValueName.ReleaseBuffer();
+        GetDlgItemText(IDC_NEWCHNL, newitem.ValueName);
 		newitem.Value = L"+";
         m_editor.AddItem(newitem);
         return 0;
