@@ -7,6 +7,7 @@
 #include <atlstr.h>
 #include <atlsimpcoll.h>
 #include <rosdlgs.h>
+#include <strsafe.h>
 #include "resource.h"
 
 class CLauncherModule : public CComModule
@@ -362,6 +363,104 @@ public:
     }
 };
 
+class CChannelsStringList :
+    public CComObjectRootEx<CComMultiThreadModelNoCS>,
+    public IEnumString
+{
+public:
+    CChannelsStringList()
+    {
+        m_pTxtFile = NULL;
+
+        HMODULE hmod = _AtlBaseModule.GetModuleInstance();
+        if (!hmod)
+            return;
+
+        HRSRC hrsc = FindResourceW(hmod, MAKEINTRESOURCE(ID_CHANNELS), L"TXT");
+        if (!hrsc)
+            return;
+
+        HGLOBAL hResData = LoadResource(hmod, hrsc);
+        if (!hResData)
+            return;
+
+        m_TxtFileSize = SizeofResource(hmod, hrsc);
+        if (!m_TxtFileSize)
+            return;
+
+        m_pTxtFile = (LPCWSTR)LockResource(hResData);
+
+        Reset();
+    }
+
+    ~CChannelsStringList()
+    {
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE Next(ULONG celt, LPOLESTR *rgelt, ULONG *pceltFetched)
+    {
+        if (pceltFetched)
+            *pceltFetched = 0;
+
+        while (m_pTxtFile && celt && m_pCurrent < m_pTxtFile + m_TxtFileSize)
+        {
+            LPCWSTR pSeparator = wcschr(m_pCurrent, L'\n');
+            if (!pSeparator)
+                break;
+
+            ULONG Size = pSeparator - m_pCurrent + 1;
+
+            *rgelt = (LPOLESTR)::CoTaskMemAlloc(Size * sizeof(WCHAR));
+            StringCchCopyW(*rgelt, Size, m_pCurrent);
+
+            if (pceltFetched)
+                (*pceltFetched)++;
+
+            m_pCurrent = pSeparator + 1;
+            celt--;
+            rgelt++;
+        }
+        return celt ? S_FALSE : S_OK;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE Skip(ULONG celt)
+    {
+        while (m_pTxtFile && celt && m_pCurrent < m_pTxtFile + m_TxtFileSize)
+        {
+            m_pCurrent = wcschr(m_pCurrent, L'\n');
+            if (!m_pCurrent)
+                break;
+            m_pCurrent++;
+            --celt;
+        }
+        return celt ? S_FALSE : S_OK;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE Reset()
+    {
+        if (!m_pTxtFile)
+            return E_FAIL;
+
+        m_pCurrent = m_pTxtFile;
+        return S_OK;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE Clone(IEnumString **ppenum)
+    {
+        return E_NOTIMPL;
+    }
+
+protected:
+    LPCWSTR m_pTxtFile;
+    LPCWSTR m_pCurrent;
+    DWORD m_TxtFileSize;
+
+public:
+    BEGIN_COM_MAP(CChannelsStringList)
+        COM_INTERFACE_ENTRY_IID(IID_IEnumString, IEnumString)
+    END_COM_MAP()
+};
+
 class CChannelsPage : public CPropertyPageImpl<CChannelsPage>
 {
 private:
@@ -465,6 +564,7 @@ INT WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 {
     gModule.Init(ObjectMap, hInstance, NULL);
     InitCommonControls();
+	CoInitialize(NULL);
 
     CLauncher launcher;
 
