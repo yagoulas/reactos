@@ -31,3 +31,5 @@
 
 #define IDC_VALUE_NAME  1041
 #define IDC_VALUE_DATA  1042
+
+#define ID_CHANNELS     5000

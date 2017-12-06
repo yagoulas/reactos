@@ -12,6 +12,11 @@
 
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 
+/* This is a utf16 file without bom and with unix line endings */
+/* Make sure you know what you are doing while editing */
+/* I made it a .bin to avoid trouble with git */
+ID_CHANNELS TXT dbgchannels.bin
+
 IDD_LAUNCHER_MAIN DIALOGEX 0, 0, 291, 186
 STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_DISABLED | WS_CAPTION
 CAPTION "Property Page"
