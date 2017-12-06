@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <windowsx.h>
 #include <commctrl.h>
 #include <commdlg.h>
 #include <atlbase.h>
@@ -497,6 +498,17 @@ public:
         {
             HWND hwndCombo = GetDlgItem(IDC_NEWCHNL);
             HWND hwndEdit = ::GetWindow(hwndCombo, GW_CHILD);
+
+            while (TRUE)
+            {
+                CComHeapPtr<OLECHAR> str;
+                HRESULT hr = pES->Next(1, &str, NULL);
+                if (hr != S_OK)
+                    break;
+                ComboBox_AddString(hwndCombo, str);
+            }
+            pES->Reset();
+
             pAC->Init(hwndEdit, pES, NULL, NULL);
         }
         SetModified();
