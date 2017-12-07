@@ -4,7 +4,7 @@
 typedef struct _FONT_ENTRY
 {
     LIST_ENTRY ListEntry;
-    FONTGDI *Font;
+    PSHARED_FACE SharedFace;
     UNICODE_STRING FaceName;
     BYTE NotEnum;
 } FONT_ENTRY, *PFONT_ENTRY;

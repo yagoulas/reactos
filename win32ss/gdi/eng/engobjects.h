@@ -138,10 +138,6 @@ typedef struct _SHARED_FACE {
   LPWSTR        Filename;
 } SHARED_FACE, *PSHARED_FACE;
 
-typedef struct _FONTGDI {
-  PSHARED_FACE  SharedFace;
-} FONTGDI, *PFONTGDI;
-
 typedef struct _PATHGDI {
   PATHOBJ PathObj;
 } PATHGDI;

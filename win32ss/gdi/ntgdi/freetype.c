@@ -780,7 +780,6 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
     FT_Error            Error;
     PFONT_ENTRY         Entry;
     FONT_ENTRY_MEM*     PrivateEntry = NULL;
-    FONTGDI *           FontGDI;
     NTSTATUS            Status;
     FT_Face             Face;
     ANSI_STRING         AnsiFaceName;
@@ -844,16 +843,6 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
         return 0;   /* failure */
     }
 
-    /* allocate a FONTGDI */
-    FontGDI = EngAllocMem(FL_ZERO_MEMORY, sizeof(FONTGDI), GDITAG_RFONT);
-    if (!FontGDI)
-    {
-        SharedFace_Release(SharedFace);
-        ExFreePoolWithTag(Entry, TAG_FONT);
-        EngSetLastError(ERROR_NOT_ENOUGH_MEMORY);
-        return 0;   /* failure */
-    }
-
     /* set file name */
     if (pFileName)
     {
@@ -862,7 +851,6 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
                                          GDITAG_PFF);
         if (Filename == NULL)
         {
-            EngFreeMem(FontGDI);
             SharedFace_Release(SharedFace);
             ExFreePoolWithTag(Entry, TAG_FONT);
             EngSetLastError(ERROR_NOT_ENOUGH_MEMORY);
@@ -880,7 +868,6 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
         {
             if (Filename)
                 ExFreePoolWithTag(Filename, GDITAG_PFF);
-            EngFreeMem(FontGDI);
             SharedFace_Release(SharedFace);
             ExFreePoolWithTag(Entry, TAG_FONT);
             return 0;
@@ -899,11 +886,10 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
     }
 
     /* set face */
-    FontGDI->SharedFace = SharedFace;
-    FontGDI->SharedFace->CharSet = ANSI_CHARSET;
-    FontGDI->SharedFace->Italic = ItalicFromStyle(Face->style_name);
-    FontGDI->SharedFace->Weight = WeightFromStyle(Face->style_name);
-    FontGDI->SharedFace->Filename = Filename;
+    SharedFace->CharSet = ANSI_CHARSET;
+    SharedFace->Italic = ItalicFromStyle(Face->style_name);
+    SharedFace->Weight = WeightFromStyle(Face->style_name);
+    SharedFace->Filename = Filename;
 
     RtlInitAnsiString(&AnsiFaceName, Face->family_name);
     Status = RtlAnsiStringToUnicodeString(&Entry->FaceName, &AnsiFaceName, TRUE);
@@ -923,7 +909,6 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
         }
         if (Filename)
             ExFreePoolWithTag(Filename, GDITAG_PFF);
-        EngFreeMem(FontGDI);
         SharedFace_Release(SharedFace);
         ExFreePoolWithTag(Entry, TAG_FONT);
         return 0;
@@ -957,7 +942,7 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
                 if ((CharSetIndex == -1 && CharSetCount == 0) ||
                     CharSetIndex == CharSetCount)
                 {
-                    FontGDI->SharedFace->CharSet = FontTci[BitIndex].ciCharset;
+                    SharedFace->CharSet = FontTci[BitIndex].ciCharset;
                 }
 
                 ++CharSetCount;
@@ -965,7 +950,7 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
         }
 
         /* set actual weight */
-        FontGDI->SharedFace->Weight = os2_usWeightClass;
+        SharedFace->Weight = os2_usWeightClass;
     }
     else
     {
@@ -974,7 +959,7 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
         Error = FT_Get_WinFNT_Header(Face, &WinFNT);
         if (!Error)
         {
-            FontGDI->SharedFace->CharSet = WinFNT.charset;
+            SharedFace->CharSet = WinFNT.charset;
         }
         IntUnLockFreeType;
     }
@@ -982,16 +967,16 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
     /* FIXME: CharSet is invalid on Marlett */
     if (RtlEqualUnicodeString(&Entry->FaceName, &MarlettW, TRUE))
     {
-        FontGDI->SharedFace->CharSet = SYMBOL_CHARSET;
+        SharedFace->CharSet = SYMBOL_CHARSET;
     }
 
     ++FaceCount;
     DPRINT("Font loaded: %s (%s)\n", Face->family_name, Face->style_name);
     DPRINT("Num glyphs: %d\n", Face->num_glyphs);
-    DPRINT("CharSet: %d\n", FontGDI->SharedFace->CharSet);
+    DPRINT("CharSet: %d\n", SharedFace->CharSet);
 
     /* Add this font resource to the font table */
-    Entry->Font = FontGDI;
+    Entry->SharedFace = SharedFace;
     Entry->NotEnum = (Characteristics & FR_NOT_ENUM);
 
     if (Characteristics & FR_PRIVATE)
@@ -1238,13 +1223,11 @@ IntGdiAddFontMemResource(PVOID Buffer, DWORD dwSize, PDWORD pNumAdded)
 static VOID FASTCALL
 CleanupFontEntry(PFONT_ENTRY FontEntry)
 {
-    PFONTGDI FontGDI = FontEntry->Font;
-    PSHARED_FACE SharedFace = FontGDI->SharedFace;
+    PSHARED_FACE SharedFace = FontEntry->SharedFace;
 
-    if (FontGDI->SharedFace->Filename)
-        ExFreePoolWithTag(FontGDI->SharedFace->Filename, GDITAG_PFF);
+    if (SharedFace->Filename)
+        ExFreePoolWithTag(SharedFace->Filename, GDITAG_PFF);
 
-    EngFreeMem(FontGDI);
     SharedFace_Release(SharedFace);
     ExFreePoolWithTag(FontEntry, TAG_FONT);
 }
@@ -1936,7 +1919,7 @@ FindFaceNameInList(PUNICODE_STRING FaceName, PLIST_ENTRY Head)
     PFONT_ENTRY CurrentEntry;
     ANSI_STRING EntryFaceNameA;
     UNICODE_STRING EntryFaceNameW;
-    FONTGDI *FontGDI;
+    PSHARED_FACE SharedFace;
     NTSTATUS status;
 
     Entry = Head->Flink;
@@ -1944,10 +1927,10 @@ FindFaceNameInList(PUNICODE_STRING FaceName, PLIST_ENTRY Head)
     {
         CurrentEntry = CONTAINING_RECORD(Entry, FONT_ENTRY, ListEntry);
 
-        FontGDI = CurrentEntry->Font;
-        ASSERT(FontGDI);
+        SharedFace = CurrentEntry->SharedFace;
+        ASSERT(SharedFace);
 
-        RtlInitAnsiString(&EntryFaceNameA, FontGDI->SharedFace->Face->family_name);
+        RtlInitAnsiString(&EntryFaceNameA, SharedFace->Face->family_name);
         status = RtlAnsiStringToUnicodeString(&EntryFaceNameW, &EntryFaceNameA, TRUE);
         if (!NT_SUCCESS(status))
         {
@@ -1963,7 +1946,7 @@ FindFaceNameInList(PUNICODE_STRING FaceName, PLIST_ENTRY Head)
         if (RtlEqualUnicodeString(FaceName, &EntryFaceNameW, TRUE))
         {
             RtlFreeUnicodeString(&EntryFaceNameW);
-            return FontGDI->SharedFace;
+            return SharedFace;
         }
 
         RtlFreeUnicodeString(&EntryFaceNameW);
@@ -2480,18 +2463,18 @@ GetFontFamilyInfoForList(LPLOGFONTW LogFont,
 {
     PLIST_ENTRY Entry;
     PFONT_ENTRY CurrentEntry;
-    FONTGDI *FontGDI;
+    PSHARED_FACE SharedFace;
     FONTFAMILYINFO InfoEntry;
     DWORD Count = *pCount;
 
     for (Entry = Head->Flink; Entry != Head; Entry = Entry->Flink)
     {
         CurrentEntry = CONTAINING_RECORD(Entry, FONT_ENTRY, ListEntry);
-        FontGDI = CurrentEntry->Font;
-        ASSERT(FontGDI);
+        SharedFace = CurrentEntry->SharedFace;
+        ASSERT(SharedFace);
 
         if (LogFont->lfCharSet != DEFAULT_CHARSET &&
-            LogFont->lfCharSet != FontGDI->SharedFace->CharSet)
+            LogFont->lfCharSet != SharedFace->CharSet)
         {
             continue;
         }
@@ -2500,13 +2483,13 @@ GetFontFamilyInfoForList(LPLOGFONTW LogFont,
         {
             if (Count < MaxCount)
             {
-                FontFamilyFillInfo(&Info[Count], NULL, NULL, FontGDI->SharedFace);
+                FontFamilyFillInfo(&Info[Count], NULL, NULL, SharedFace);
             }
             Count++;
             continue;
         }
 
-        FontFamilyFillInfo(&InfoEntry, NULL, NULL, FontGDI->SharedFace);
+        FontFamilyFillInfo(&InfoEntry, NULL, NULL, SharedFace);
 
         if (_wcsicmp(LogFont->lfFaceName, InfoEntry.EnumLogFontEx.elfLogFont.lfFaceName) != 0 &&
             _wcsicmp(LogFont->lfFaceName, InfoEntry.EnumLogFontEx.elfFullName) != 0)
@@ -4308,7 +4291,7 @@ FindBestFontFromList(PSHARED_FACE *pSharedFace, ULONG *MatchPenalty,
     ULONG Penalty;
     PLIST_ENTRY Entry;
     PFONT_ENTRY CurrentEntry;
-    FONTGDI *FontGDI;
+    PSHARED_FACE SharedFace;
     OUTLINETEXTMETRICW *Otm = NULL;
     UINT OtmSize, OldOtmSize = 0;
     FT_Face Face;
@@ -4329,12 +4312,12 @@ FindBestFontFromList(PSHARED_FACE *pSharedFace, ULONG *MatchPenalty,
         CurrentEntry = CONTAINING_RECORD(Entry, FONT_ENTRY, ListEntry);
         Entry = Entry->Flink;
 
-        FontGDI = CurrentEntry->Font;
-        ASSERT(FontGDI);
-        Face = FontGDI->SharedFace->Face;
+        SharedFace = CurrentEntry->SharedFace;
+        ASSERT(SharedFace);
+        Face = SharedFace->Face;
 
         /* get text metrics */
-        OtmSize = ftGetOutlineTextMetrics(FontGDI->SharedFace, NULL, 0, NULL);
+        OtmSize = ftGetOutlineTextMetrics(SharedFace, NULL, 0, NULL);
         if (OtmSize > OldOtmSize)
         {
             if (Otm)
@@ -4345,7 +4328,7 @@ FindBestFontFromList(PSHARED_FACE *pSharedFace, ULONG *MatchPenalty,
         /* update FontObj if lowest penalty */
         if (Otm)
         {
-            OtmSize = ftGetOutlineTextMetrics(FontGDI->SharedFace, NULL, OtmSize, Otm);
+            OtmSize = ftGetOutlineTextMetrics(SharedFace, NULL, OtmSize, Otm);
             if (!OtmSize)
                 continue;
 
@@ -4354,7 +4337,7 @@ FindBestFontFromList(PSHARED_FACE *pSharedFace, ULONG *MatchPenalty,
             Penalty = GetFontPenalty(LogFont, Otm, Face->style_name);
             if (*MatchPenalty == 0xFFFFFFFF || Penalty < *MatchPenalty)
             {
-                *pSharedFace = FontGDI->SharedFace;
+                *pSharedFace = SharedFace;
                 *MatchPenalty = Penalty;
             }
         }
@@ -4424,7 +4407,7 @@ PRFONT LFONT_Realize(PLFONT pLFont, PPDEVOBJ hdevConsumer, DHPDEV dhpdev)
 
             Face = pSharedFace->Face;
 
-            //FontGDI->SharedFace->Weight = WeightFromStyle(Face->style_name);
+            //SharedFace->Weight = WeightFromStyle(Face->style_name);
 
             if (!pSharedFace->Italic)
                 pSharedFace->Italic = ItalicFromStyle(Face->style_name);
@@ -4577,10 +4560,10 @@ IntGdiGetFontResourceInfo(
          ListEntry = ListEntry->Flink)
     {
         FontEntry = CONTAINING_RECORD(ListEntry, FONT_ENTRY, ListEntry);
-        if (FontEntry->Font->SharedFace->Filename == NULL)
+        if (FontEntry->SharedFace->Filename == NULL)
             continue;
 
-        RtlInitUnicodeString(&EntryFileName , FontEntry->Font->SharedFace->Filename);
+        RtlInitUnicodeString(&EntryFileName , FontEntry->SharedFace->Filename);
         if (!IntGetFullFileName(NameInfo2, Size, &EntryFileName))
             continue;
 
@@ -4589,7 +4572,7 @@ IntGdiGetFontResourceInfo(
 
         IsEqual = FALSE;
         FontFamilyFillInfo(&FamInfo[Count], FontEntry->FaceName.Buffer,
-                           NULL, FontEntry->Font->SharedFace);
+                           NULL, FontEntry->SharedFace);
         for (i = 0; i < Count; ++i)
         {
             if (EqualFamilyInfo(&FamInfo[i], &FamInfo[Count]))
