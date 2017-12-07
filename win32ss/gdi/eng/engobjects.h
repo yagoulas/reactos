@@ -131,22 +131,16 @@ typedef struct _SHARED_FACE {
   PSHARED_MEM   Memory;
   SHARED_FACE_CACHE EnglishUS;
   SHARED_FACE_CACHE UserLanguage;
+
+  BYTE          Italic;
+  LONG          Weight;
+  BYTE          CharSet;
+  LPWSTR        Filename;
 } SHARED_FACE, *PSHARED_FACE;
 
 typedef struct _FONTGDI {
   FONTOBJ       FontObj;
-  FLONG         flType;
-
   PSHARED_FACE  SharedFace;
-
-  LPWSTR        Filename;
-  BYTE          RequestUnderline;
-  BYTE          RequestStrikeOut;
-  BYTE          RequestItalic;
-  LONG          RequestWeight;
-  BYTE          OriginalItalic;
-  LONG          OriginalWeight;
-  BYTE          CharSet;
 } FONTGDI, *PFONTGDI;
 
 typedef struct _PATHGDI {

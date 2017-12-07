@@ -794,6 +794,7 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
     FT_UShort           os2_version;
     FT_ULong            os2_ulCodePageRange1;
     FT_UShort           os2_usWeightClass;
+    LPWSTR              Filename;
 
     if (SharedFace == NULL && CharSetIndex == -1)
     {
@@ -856,10 +857,10 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
     /* set file name */
     if (pFileName)
     {
-        FontGDI->Filename = ExAllocatePoolWithTag(PagedPool,
-                                                  pFileName->Length + sizeof(UNICODE_NULL),
-                                                  GDITAG_PFF);
-        if (FontGDI->Filename == NULL)
+        Filename = ExAllocatePoolWithTag(PagedPool,
+                                         pFileName->Length + sizeof(UNICODE_NULL),
+                                         GDITAG_PFF);
+        if (Filename == NULL)
         {
             EngFreeMem(FontGDI);
             SharedFace_Release(SharedFace);
@@ -867,18 +868,18 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
             EngSetLastError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;   /* failure */
         }
-        RtlCopyMemory(FontGDI->Filename, pFileName->Buffer, pFileName->Length);
-        FontGDI->Filename[pFileName->Length / sizeof(WCHAR)] = UNICODE_NULL;
+        RtlCopyMemory(Filename, pFileName->Buffer, pFileName->Length);
+        Filename[pFileName->Length / sizeof(WCHAR)] = UNICODE_NULL;
     }
     else
     {
-        FontGDI->Filename = NULL;
+        Filename = NULL;
 
         PrivateEntry = ExAllocatePoolWithTag(PagedPool, sizeof(FONT_ENTRY_MEM), TAG_FONT);
         if (!PrivateEntry)
         {
-            if (FontGDI->Filename)
-                ExFreePoolWithTag(FontGDI->Filename, GDITAG_PFF);
+            if (Filename)
+                ExFreePoolWithTag(Filename, GDITAG_PFF);
             EngFreeMem(FontGDI);
             SharedFace_Release(SharedFace);
             ExFreePoolWithTag(Entry, TAG_FONT);
@@ -899,11 +900,10 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
 
     /* set face */
     FontGDI->SharedFace = SharedFace;
-    FontGDI->CharSet = ANSI_CHARSET;
-    FontGDI->OriginalItalic = ItalicFromStyle(Face->style_name);
-    FontGDI->RequestItalic = FALSE;
-    FontGDI->OriginalWeight = WeightFromStyle(Face->style_name);
-    FontGDI->RequestWeight = FW_NORMAL;
+    FontGDI->SharedFace->CharSet = ANSI_CHARSET;
+    FontGDI->SharedFace->Italic = ItalicFromStyle(Face->style_name);
+    FontGDI->SharedFace->Weight = WeightFromStyle(Face->style_name);
+    FontGDI->SharedFace->Filename = Filename;
 
     RtlInitAnsiString(&AnsiFaceName, Face->family_name);
     Status = RtlAnsiStringToUnicodeString(&Entry->FaceName, &AnsiFaceName, TRUE);
@@ -921,8 +921,8 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
             }
             ExFreePoolWithTag(PrivateEntry, TAG_FONT);
         }
-        if (FontGDI->Filename)
-            ExFreePoolWithTag(FontGDI->Filename, GDITAG_PFF);
+        if (Filename)
+            ExFreePoolWithTag(Filename, GDITAG_PFF);
         EngFreeMem(FontGDI);
         SharedFace_Release(SharedFace);
         ExFreePoolWithTag(Entry, TAG_FONT);
@@ -957,7 +957,7 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
                 if ((CharSetIndex == -1 && CharSetCount == 0) ||
                     CharSetIndex == CharSetCount)
                 {
-                    FontGDI->CharSet = FontTci[BitIndex].ciCharset;
+                    FontGDI->SharedFace->CharSet = FontTci[BitIndex].ciCharset;
                 }
 
                 ++CharSetCount;
@@ -965,7 +965,7 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
         }
 
         /* set actual weight */
-        FontGDI->OriginalWeight = os2_usWeightClass;
+        FontGDI->SharedFace->Weight = os2_usWeightClass;
     }
     else
     {
@@ -974,7 +974,7 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
         Error = FT_Get_WinFNT_Header(Face, &WinFNT);
         if (!Error)
         {
-            FontGDI->CharSet = WinFNT.charset;
+            FontGDI->SharedFace->CharSet = WinFNT.charset;
         }
         IntUnLockFreeType;
     }
@@ -982,13 +982,13 @@ IntGdiLoadFontsFromMemory(PGDI_LOAD_FONT pLoadFont,
     /* FIXME: CharSet is invalid on Marlett */
     if (RtlEqualUnicodeString(&Entry->FaceName, &MarlettW, TRUE))
     {
-        FontGDI->CharSet = SYMBOL_CHARSET;
+        FontGDI->SharedFace->CharSet = SYMBOL_CHARSET;
     }
 
     ++FaceCount;
     DPRINT("Font loaded: %s (%s)\n", Face->family_name, Face->style_name);
     DPRINT("Num glyphs: %d\n", Face->num_glyphs);
-    DPRINT("CharSet: %d\n", FontGDI->CharSet);
+    DPRINT("CharSet: %d\n", FontGDI->SharedFace->CharSet);
 
     /* Add this font resource to the font table */
     Entry->Font = FontGDI;
@@ -1241,8 +1241,8 @@ CleanupFontEntry(PFONT_ENTRY FontEntry)
     PFONTGDI FontGDI = FontEntry->Font;
     PSHARED_FACE SharedFace = FontGDI->SharedFace;
 
-    if (FontGDI->Filename)
-        ExFreePoolWithTag(FontGDI->Filename, GDITAG_PFF);
+    if (FontGDI->SharedFace->Filename)
+        ExFreePoolWithTag(FontGDI->SharedFace->Filename, GDITAG_PFF);
 
     EngFreeMem(FontGDI);
     SharedFace_Release(SharedFace);
@@ -1502,13 +1502,13 @@ static BOOL face_has_symbol_charmap(FT_Face ft_face)
 
 
 static void FASTCALL
-FillTMEx(TEXTMETRICW *TM, PFONTGDI FontGDI,
+FillTM(TEXTMETRICW *TM, PSHARED_FACE SharedFace, RFONT *prfnt,
          TT_OS2 *pOS2, TT_HoriHeader *pHori,
-         FT_WinFNT_HeaderRec *pFNT, BOOL RealFont)
+         FT_WinFNT_HeaderRec *pFNT)
 {
     FT_Fixed XScale, YScale;
     int Ascent, Descent;
-    FT_Face Face = FontGDI->SharedFace->Face;
+    FT_Face Face = SharedFace->Face;
 
     XScale = Face->size->metrics.x_scale;
     YScale = Face->size->metrics.y_scale;
@@ -1530,21 +1530,21 @@ FillTMEx(TEXTMETRICW *TM, PFONTGDI FontGDI,
         TM->tmDefaultChar      = pFNT->default_char + pFNT->first_char;
         TM->tmBreakChar        = pFNT->break_char + pFNT->first_char;
         TM->tmPitchAndFamily   = pFNT->pitch_and_family;
-        if (RealFont)
+        TM->tmCharSet          = SharedFace->CharSet;
+
+        if (prfnt)
         {
-            TM->tmWeight       = FontGDI->OriginalWeight;
-            TM->tmItalic       = FontGDI->OriginalItalic;
-            TM->tmUnderlined   = pFNT->underline;
-            TM->tmStruckOut    = pFNT->strike_out;
-            TM->tmCharSet      = pFNT->charset;
+            TM->tmWeight       = prfnt->lfWeight == FW_DONTCARE ? FW_NORMAL : prfnt->lfWeight;
+            TM->tmItalic       = prfnt->lfItalic ? 0xFF : 0;
+            TM->tmUnderlined   = prfnt->lfUnderline ? 0xFF : 0;
+            TM->tmStruckOut    = prfnt->lfStrikeOut ? 0xFF : 0;
         }
         else
         {
-            TM->tmWeight       = FontGDI->RequestWeight;
-            TM->tmItalic       = FontGDI->RequestItalic;
-            TM->tmUnderlined   = FontGDI->RequestUnderline;
-            TM->tmStruckOut    = FontGDI->RequestStrikeOut;
-            TM->tmCharSet      = FontGDI->CharSet;
+            TM->tmWeight       = FW_NORMAL;
+            TM->tmItalic       = FALSE;
+            TM->tmUnderlined   = FALSE;
+            TM->tmStruckOut    = FALSE;
         }
         return;
     }
@@ -1588,22 +1588,22 @@ FillTMEx(TEXTMETRICW *TM, PFONTGDI FontGDI,
     /* Correct forumla to get the maxcharwidth from unicode and ansi font */
     TM->tmMaxCharWidth = (FT_MulFix(Face->max_advance_width, XScale) + 32) >> 6;
 
-    if (RealFont)
-    {
-        TM->tmWeight = FontGDI->OriginalWeight;
-    }
-    else
-    {
-        if (FontGDI->OriginalWeight != FW_DONTCARE &&
-            FontGDI->OriginalWeight != FW_NORMAL)
+        if (SharedFace->Weight != FW_DONTCARE &&
+            SharedFace->Weight != FW_NORMAL)
         {
-            TM->tmWeight = FontGDI->OriginalWeight;
+            TM->tmWeight = SharedFace->Weight;
         }
         else
         {
-            TM->tmWeight = FontGDI->RequestWeight;
+            if (prfnt && prfnt->lfWeight != FW_DONTCARE)
+            {
+                TM->tmWeight = prfnt->lfWeight;
+            }
+            else
+            {
+                TM->tmWeight = FW_NORMAL;
+            }
         }
-    }
 
     TM->tmOverhang = 0;
     TM->tmDigitizedAspectX = 96;
@@ -1640,15 +1640,7 @@ FillTMEx(TEXTMETRICW *TM, PFONTGDI FontGDI,
         TM->tmDefaultChar = TM->tmBreakChar - 1;
     }
 
-    if (RealFont)
-    {
-        TM->tmItalic = FontGDI->OriginalItalic;
-        TM->tmUnderlined = FALSE;
-        TM->tmStruckOut  = FALSE;
-    }
-    else
-    {
-        if (FontGDI->OriginalItalic || FontGDI->RequestItalic)
+        if (SharedFace->Italic || (prfnt && prfnt->lfItalic))
         {
             TM->tmItalic = 0xFF;
         }
@@ -1656,9 +1648,16 @@ FillTMEx(TEXTMETRICW *TM, PFONTGDI FontGDI,
         {
             TM->tmItalic = 0;
         }
-        TM->tmUnderlined = (FontGDI->RequestUnderline ? 0xFF : 0);
-        TM->tmStruckOut  = (FontGDI->RequestStrikeOut ? 0xFF : 0);
-    }
+        if (prfnt)
+        {
+            TM->tmUnderlined = prfnt->lfUnderline ? 0xFF : 0;
+            TM->tmStruckOut  = prfnt->lfStrikeOut ? 0xFF : 0;
+        }
+        else
+        {
+            TM->tmUnderlined = 0;
+            TM->tmStruckOut  = 0;
+        }
 
     if (!FT_IS_FIXED_WIDTH(Face))
     {
@@ -1740,15 +1739,7 @@ FillTMEx(TEXTMETRICW *TM, PFONTGDI FontGDI,
         TM->tmPitchAndFamily |= TMPF_TRUETYPE;
     }
 
-    TM->tmCharSet = FontGDI->CharSet;
-}
-
-static void FASTCALL
-FillTM(TEXTMETRICW *TM, PFONTGDI FontGDI,
-       TT_OS2 *pOS2, TT_HoriHeader *pHori,
-       FT_WinFNT_HeaderRec *pFNT)
-{
-    FillTMEx(TM, FontGDI, pOS2, pHori, pFNT, FALSE);
+    TM->tmCharSet = SharedFace->CharSet;
 }
 
 static NTSTATUS
@@ -1760,7 +1751,8 @@ IntGetFontLocalizedName(PUNICODE_STRING pNameW, PSHARED_FACE SharedFace,
  *
  */
 INT FASTCALL
-ftGetOutlineTextMetrics(PFONTGDI FontGDI,
+ftGetOutlineTextMetrics(PSHARED_FACE SharedFace, 
+                        RFONT *prfnt,
                         UINT Size,
                         OUTLINETEXTMETRICW *Otm)
 {
@@ -1772,7 +1764,6 @@ ftGetOutlineTextMetrics(PFONTGDI FontGDI,
     FT_Error Error;
     char *Cp;
     UNICODE_STRING FamilyNameW, FaceNameW, StyleNameW, FullNameW;
-    PSHARED_FACE SharedFace = FontGDI->SharedFace;
     PSHARED_FACE_CACHE Cache = (PRIMARYLANGID(gusLanguageID) == LANG_ENGLISH) ? &SharedFace->EnglishUS : &SharedFace->UserLanguage;
     FT_Face Face = SharedFace->Face;
 
@@ -1852,7 +1843,7 @@ ftGetOutlineTextMetrics(PFONTGDI FontGDI,
 
     Otm->otmSize = Cache->OutlineRequiredSize;
 
-    FillTM(&Otm->otmTextMetrics, FontGDI, pOS2, pHori, !Error ? &Win : 0);
+    FillTM(&Otm->otmTextMetrics, SharedFace, prfnt, pOS2, pHori, !Error ? &Win : 0);
 
     Otm->otmFiller = 0;
     RtlCopyMemory(&Otm->otmPanoseNumber, pOS2->panose, PANOSE_COUNT);
@@ -1936,7 +1927,7 @@ IntGetOutlineTextMetrics(PRFONT prfnt,
                          OUTLINETEXTMETRICW *Otm)
 {
   PFONTGDI FontGDI = ObjToGDI(prfnt->Font, FONT);
-  return ftGetOutlineTextMetrics(FontGDI, Size, Otm);
+  return ftGetOutlineTextMetrics(FontGDI->SharedFace, prfnt, Size, Otm);
 }
 
 static PFONTGDI FASTCALL
@@ -2264,13 +2255,13 @@ FontFamilyFillInfo(PFONTFAMILYINFO Info, LPCWSTR FaceName,
 
     RtlInitUnicodeString(&NameW, NULL);
     RtlZeroMemory(Info, sizeof(FONTFAMILYINFO));
-    Size = ftGetOutlineTextMetrics(FontGDI, 0, NULL);
+    Size = ftGetOutlineTextMetrics(FontGDI->SharedFace, NULL, 0, NULL);
     Otm = ExAllocatePoolWithTag(PagedPool, Size, GDITAG_TEXT);
     if (!Otm)
     {
         return;
     }
-    Size = ftGetOutlineTextMetrics(FontGDI, Size, Otm);
+    Size = ftGetOutlineTextMetrics(FontGDI->SharedFace, NULL, Size, Otm);
     if (!Size)
     {
         ExFreePoolWithTag(Otm, GDITAG_TEXT);
@@ -2502,7 +2493,7 @@ GetFontFamilyInfoForList(LPLOGFONTW LogFont,
         ASSERT(FontGDI);
 
         if (LogFont->lfCharSet != DEFAULT_CHARSET &&
-            LogFont->lfCharSet != FontGDI->CharSet)
+            LogFont->lfCharSet != FontGDI->SharedFace->CharSet)
         {
             continue;
         }
@@ -3142,14 +3133,14 @@ ftGdiGetGlyphOutline(
     aveWidth = FT_IS_SCALABLE(ft_face) ? abs(prfnt->lfWidth) : 0;
     orientation = FT_IS_SCALABLE(ft_face) ? prfnt->lfOrientation : 0;
 
-    Size = ftGetOutlineTextMetrics(FontGDI, 0, NULL);
+    Size = IntGetOutlineTextMetrics(prfnt, 0, NULL);
     potm = ExAllocatePoolWithTag(PagedPool, Size, GDITAG_TEXT);
     if (!potm)
     {
         EngSetLastError(ERROR_NOT_ENOUGH_MEMORY);
         return GDI_ERROR;
     }
-    Size = ftGetOutlineTextMetrics(FontGDI, Size, potm);
+    Size = IntGetOutlineTextMetrics(prfnt, Size, potm);
     if (!Size)
     {
         /* FIXME: last error? */
@@ -3575,8 +3566,8 @@ TextIntGetTextExtentPoint(PDC dc,
 
     TextIntUpdateSize(prfnt, FALSE);
 
-    EmuBold = (prfnt->lfWeight >= FW_BOLD && FontGDI->OriginalWeight <= FW_NORMAL);
-    EmuItalic = (prfnt->lfItalic && !FontGDI->OriginalItalic);
+    EmuBold = (prfnt->lfWeight >= FW_BOLD && FontGDI->SharedFace->Weight <= FW_NORMAL);
+    EmuItalic = (prfnt->lfItalic && !FontGDI->SharedFace->Italic);
 
     Render = IntIsFontRenderingEnabled();
     if (Render)
@@ -3921,7 +3912,7 @@ ftGdiGetTextMetricsW(
 
             if (NT_SUCCESS(Status))
             {
-                FillTM(&ptmwi->TextMetric, FontGDI, pOS2, pHori, !Error ? &Win : 0);
+                FillTM(&ptmwi->TextMetric, FontGDI->SharedFace, prfnt, pOS2, pHori, !Error ? &Win : 0);
 
                 /* FIXME: Fill Diff member */
                 RtlZeroMemory(&ptmwi->Diff, sizeof(ptmwi->Diff));
@@ -4360,7 +4351,7 @@ FindBestFontFromList(FONTOBJ **FontObj, ULONG *MatchPenalty,
         Face = FontGDI->SharedFace->Face;
 
         /* get text metrics */
-        OtmSize = ftGetOutlineTextMetrics(FontGDI, 0, NULL);
+        OtmSize = ftGetOutlineTextMetrics(FontGDI->SharedFace, NULL, 0, NULL);
         if (OtmSize > OldOtmSize)
         {
             if (Otm)
@@ -4371,7 +4362,7 @@ FindBestFontFromList(FONTOBJ **FontObj, ULONG *MatchPenalty,
         /* update FontObj if lowest penalty */
         if (Otm)
         {
-            OtmSize = ftGetOutlineTextMetrics(FontGDI, OtmSize, Otm);
+            OtmSize = ftGetOutlineTextMetrics(FontGDI->SharedFace, NULL, OtmSize, Otm);
             if (!OtmSize)
                 continue;
 
@@ -4388,40 +4379,6 @@ FindBestFontFromList(FONTOBJ **FontObj, ULONG *MatchPenalty,
 
     if (Otm)
         ExFreePoolWithTag(Otm, GDITAG_TEXT);
-}
-
-static
-FLONG
-FASTCALL
-IntFontType(PFONTGDI Font)
-{
-    PS_FontInfoRec psfInfo;
-    FT_ULong tmp_size = 0;
-    FT_Face Face = Font->SharedFace->Face;
-    FLONG ret = 0;
-
-    if (FT_HAS_MULTIPLE_MASTERS(Face))
-        ret |= FO_MULTIPLEMASTER;
-    if (FT_HAS_VERTICAL(Face))
-        ret |= FO_VERT_FACE;
-    if (!FT_IS_SCALABLE(Face))
-        ret |= FO_TYPE_RASTER;
-    if (FT_IS_SFNT(Face))
-    {
-        ret |= FO_TYPE_TRUETYPE;
-        if (FT_Get_Sfnt_Table(Face, ft_sfnt_post))
-            ret |= FO_POSTSCRIPT;
-    }
-    if (!FT_Get_PS_Font_Info(Face, &psfInfo ))
-    {
-        ret |= FO_POSTSCRIPT;
-    }
-    /* Check for the presence of the 'CFF ' table to check if the font is Type1 */
-    if (!FT_Load_Sfnt_Table(Face, TTAG_CFF, 0, NULL, &tmp_size))
-    {
-        ret |= (FO_CFF|FO_POSTSCRIPT);
-    }
-    return ret;
 }
 
 PRFONT LFONT_Realize(PLFONT pLFont, PPDEVOBJ hdevConsumer, DHPDEV dhpdev)
@@ -4482,21 +4439,12 @@ PRFONT LFONT_Realize(PLFONT pLFont, PPDEVOBJ hdevConsumer, DHPDEV dhpdev)
             prfnt->hdevConsumer = hdevConsumer;
             prfnt->dhpdev = dhpdev;
 
-            FontGdi->flType = IntFontType(FontGdi);
-            FontGdi->RequestUnderline = pLogFont->lfUnderline ? 0xFF : 0;
-            FontGdi->RequestStrikeOut = pLogFont->lfStrikeOut ? 0xFF : 0;
-            FontGdi->RequestItalic = pLogFont->lfItalic ? 0xFF : 0;
-            if (pLogFont->lfWeight != FW_DONTCARE)
-                FontGdi->RequestWeight = pLogFont->lfWeight;
-            else
-                FontGdi->RequestWeight = FW_NORMAL;
-
             Face = FontGdi->SharedFace->Face;
 
-            //FontGdi->OriginalWeight = WeightFromStyle(Face->style_name);
+            //FontGDI->SharedFace->Weight = WeightFromStyle(Face->style_name);
 
-            if (!FontGdi->OriginalItalic)
-                FontGdi->OriginalItalic = ItalicFromStyle(Face->style_name);
+            if (!FontGdi->SharedFace->Italic)
+                FontGdi->SharedFace->Italic = ItalicFromStyle(Face->style_name);
 
         }
     }
@@ -4646,10 +4594,10 @@ IntGdiGetFontResourceInfo(
          ListEntry = ListEntry->Flink)
     {
         FontEntry = CONTAINING_RECORD(ListEntry, FONT_ENTRY, ListEntry);
-        if (FontEntry->Font->Filename == NULL)
+        if (FontEntry->Font->SharedFace->Filename == NULL)
             continue;
 
-        RtlInitUnicodeString(&EntryFileName , FontEntry->Font->Filename);
+        RtlInitUnicodeString(&EntryFileName , FontEntry->Font->SharedFace->Filename);
         if (!IntGetFullFileName(NameInfo2, Size, &EntryFileName))
             continue;
 
@@ -5208,8 +5156,8 @@ GreExtTextOutW(
     IntLockFreeType;
     face = FontGDI->SharedFace->Face;
 
-    EmuBold = (prfnt->lfWeight >= FW_BOLD && FontGDI->OriginalWeight <= FW_NORMAL);
-    EmuItalic = (prfnt->lfItalic && !FontGDI->OriginalItalic);
+    EmuBold = (prfnt->lfWeight >= FW_BOLD && FontGDI->SharedFace->Weight <= FW_NORMAL);
+    EmuItalic = (prfnt->lfItalic && !FontGDI->SharedFace->Italic);
 
     if (Render)
         RenderMode = IntGetFontRenderMode(prfnt);
@@ -6338,14 +6286,14 @@ NtGdiGetGlyphIndicesW(
         }
         else
         {
-            Size = ftGetOutlineTextMetrics(FontGDI, 0, NULL);
+            Size = IntGetOutlineTextMetrics(prfnt, 0, NULL);
             potm = ExAllocatePoolWithTag(PagedPool, Size, GDITAG_TEXT);
             if (!potm)
             {
                 cwc = GDI_ERROR;
                 goto ErrorRet;
             }
-            Size = ftGetOutlineTextMetrics(FontGDI, Size, potm);
+            Size = IntGetOutlineTextMetrics(prfnt, Size, potm);
             if (Size)
                 DefChar = potm->otmTextMetrics.tmDefaultChar;
             ExFreePoolWithTag(potm, GDITAG_TEXT);
