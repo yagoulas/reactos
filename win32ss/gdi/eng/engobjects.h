@@ -139,7 +139,6 @@ typedef struct _SHARED_FACE {
 } SHARED_FACE, *PSHARED_FACE;
 
 typedef struct _FONTGDI {
-  FONTOBJ       FontObj;
   PSHARED_FACE  SharedFace;
 } FONTGDI, *PFONTGDI;
 

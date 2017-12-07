@@ -4318,7 +4318,7 @@ GetFontPenalty(const LOGFONTW *               LogFont,
 }
 
 static __inline VOID
-FindBestFontFromList(FONTOBJ **FontObj, ULONG *MatchPenalty,
+FindBestFontFromList(PSHARED_FACE **pSharedFace, ULONG *MatchPenalty,
                      const LOGFONTW *LogFont,
                      const PLIST_ENTRY Head)
 {
@@ -4330,7 +4330,7 @@ FindBestFontFromList(FONTOBJ **FontObj, ULONG *MatchPenalty,
     UINT OtmSize, OldOtmSize = 0;
     FT_Face Face;
 
-    ASSERT(FontObj);
+    ASSERT(pSharedFace);
     ASSERT(MatchPenalty);
     ASSERT(LogFont);
     ASSERT(Head);
@@ -4339,7 +4339,7 @@ FindBestFontFromList(FONTOBJ **FontObj, ULONG *MatchPenalty,
     OldOtmSize = 0x200;
     Otm = ExAllocatePoolWithTag(PagedPool, OldOtmSize, GDITAG_TEXT);
 
-    /* get the FontObj of lowest penalty */
+    /* get the SharedFace of lowest penalty */
     Entry = Head->Flink;
     while (Entry != Head)
     {
@@ -4371,7 +4371,7 @@ FindBestFontFromList(FONTOBJ **FontObj, ULONG *MatchPenalty,
             Penalty = GetFontPenalty(LogFont, Otm, Face->style_name);
             if (*MatchPenalty == 0xFFFFFFFF || Penalty < *MatchPenalty)
             {
-                *FontObj = GDIToObj(FontGDI, FONT);
+                *pSharedFace = FontGDI->SharedFace;
                 *MatchPenalty = Penalty;
             }
         }
@@ -4388,7 +4388,7 @@ PRFONT LFONT_Realize(PLFONT pLFont, PPDEVOBJ hdevConsumer, DHPDEV dhpdev)
     LOGFONTW SubstitutedLogFont;
     FT_Face Face;
     ULONG MatchPenalty;
-    FONTOBJ *pFontObj;
+    SHARED_FACE *pSharedFace;
     PRFONT prfnt;
 
     pLogFont = &pLFont->logfont.elfEnumLogfontEx.elfLogFont;
@@ -4405,20 +4405,20 @@ PRFONT LFONT_Realize(PLFONT pLFont, PPDEVOBJ hdevConsumer, DHPDEV dhpdev)
 
     /* Search private fonts */
     IntLockProcessPrivateFonts(Win32Process);
-    FindBestFontFromList(&pFontObj, &MatchPenalty, &SubstitutedLogFont,
+    FindBestFontFromList(&pSharedFace, &MatchPenalty, &SubstitutedLogFont,
                          &Win32Process->PrivateFontListHead);
     IntUnLockProcessPrivateFonts(Win32Process);
 
     /* Search system fonts */
     IntLockGlobalFonts;
-    FindBestFontFromList(&pFontObj, &MatchPenalty, &SubstitutedLogFont,
+    FindBestFontFromList(&pSharedFace, &MatchPenalty, &SubstitutedLogFont,
                          &FontListHead);
     IntUnLockGlobalFonts;
 
-    if (!pFontObj)
+    if (!pSharedFace)
     {
         DPRINT1("Request font %S not found, no fonts loaded at all\n",
-                pLogFont->lfFaceName);
+                pSharedFace->lfFaceName);
         prfnt = NULL;
     }
     else
@@ -4426,8 +4426,8 @@ PRFONT LFONT_Realize(PLFONT pLFont, PPDEVOBJ hdevConsumer, DHPDEV dhpdev)
         prfnt = RFONT_Alloc();
         if (prfnt)
         {
-            PFONTGDI FontGdi = ObjToGDI(prfnt->Font, FONT);
-            prfnt->Font->iUniq = 1; // Now it can be cached.
+            prfnt->FontObj.iUniq = 1; // Now it can be cached.
+            prfnt->SharedFace = pSharedFace;
             prfnt->lfHeight = pLogFont->lfHeight;
             prfnt->lfWidth = pLogFont->lfWidth;
             prfnt->lfOrientation = pLogFont->lfOrientation;
@@ -4439,12 +4439,12 @@ PRFONT LFONT_Realize(PLFONT pLFont, PPDEVOBJ hdevConsumer, DHPDEV dhpdev)
             prfnt->hdevConsumer = hdevConsumer;
             prfnt->dhpdev = dhpdev;
 
-            Face = FontGdi->SharedFace->Face;
+            Face = pSharedFace->Face;
 
             //FontGDI->SharedFace->Weight = WeightFromStyle(Face->style_name);
 
-            if (!FontGdi->SharedFace->Italic)
-                FontGdi->SharedFace->Italic = ItalicFromStyle(Face->style_name);
+            if (!pSharedFace->Italic)
+                pSharedFace->Italic = ItalicFromStyle(Face->style_name);
 
         }
     }
@@ -4809,17 +4809,16 @@ BOOL
 FASTCALL
 ftGdiRealizationInfo(PRFONT prfnt, PREALIZATION_INFO Info)
 {
-    PFONTGDI Font = ObjToGDI(prfnt->Font, FONT);
-    if (FT_HAS_FIXED_SIZES(Font->SharedFace->Face))
+    if (FT_HAS_FIXED_SIZES(prfnt->SharedFace->Face))
         Info->iTechnology = RI_TECH_BITMAP;
     else
     {
-        if (FT_IS_SCALABLE(Font->SharedFace->Face))
+        if (FT_IS_SCALABLE(prfnt->SharedFace->Face))
             Info->iTechnology = RI_TECH_SCALABLE;
         else
             Info->iTechnology = RI_TECH_FIXED;
     }
-    Info->iUniq = Font->FontObj.iUniq;
+    Info->iUniq = prfnt->FontObj.iUniq;
     Info->dwUnknown = -1;
     return TRUE;
 }

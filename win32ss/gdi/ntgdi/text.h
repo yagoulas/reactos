@@ -74,7 +74,9 @@ PRFONT LFONT_Realize(PLFONT pLFont, PPDEVOBJ hdevConsumer, DHPDEV dhpdev);
 /* Realized GDI font object */
 typedef struct _RFONT
 {
-    FONTOBJ      *Font;
+    FONTOBJ       FontObj;
+    PSHARED_FACE  SharedFace;
+
     WCHAR         FullName[LF_FULLFACESIZE];
     WCHAR         Style[LF_FACESIZE];
     WCHAR         FaceName[LF_FACESIZE];
