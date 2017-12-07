@@ -157,7 +157,9 @@ NtGdiGetCharSet(HDC hDC)
 {
     PDC Dc;
     PDC_ATTR pdcattr;
+    PRFONT prfnt;
     DWORD cscp;
+
     // If here, update everything!
     Dc = DC_LockDc(hDC);
     if (!Dc)
@@ -165,7 +167,14 @@ NtGdiGetCharSet(HDC hDC)
         EngSetLastError(ERROR_INVALID_HANDLE);
         return 0;
     }
-    cscp = ftGdiGetTextCharsetInfo(Dc, NULL, 0);
+    prfnt = DC_prfnt(Dc);
+    if (!prfnt)
+    {
+        EngSetLastError(ERROR_INVALID_HANDLE);
+        return 0;
+    }
+
+    cscp = ftGdiGetTextCharsetInfo(prfnt, NULL, 0);
     pdcattr = Dc->pdcattr;
     pdcattr->iCS_CP = cscp;
     pdcattr->ulDirty_ &= ~DIRTY_CHARSET;
@@ -223,7 +232,7 @@ NtGdiGetTextCharsetInfo(
     INT Ret;
     FONTSIGNATURE fsSafe;
     PFONTSIGNATURE pfsSafe = &fsSafe;
-    NTSTATUS Status = STATUS_SUCCESS;
+    PRFONT prfnt;
 
     Dc = DC_LockDc(hdc);
     if (!Dc)
@@ -231,10 +240,17 @@ NtGdiGetTextCharsetInfo(
         EngSetLastError(ERROR_INVALID_HANDLE);
         return DEFAULT_CHARSET;
     }
+    prfnt = DC_prfnt(Dc);
+    if (!prfnt)
+    {
+        EngSetLastError(ERROR_INVALID_HANDLE);
+        DC_UnlockDc(Dc);
+        return 0;
+    }
 
     if (!lpSig) pfsSafe = NULL;
 
-    Ret = HIWORD(ftGdiGetTextCharsetInfo( Dc, pfsSafe, dwFlags));
+    Ret = HIWORD(ftGdiGetTextCharsetInfo( prfnt, pfsSafe, dwFlags));
 
     if (lpSig)
     {
@@ -250,15 +266,10 @@ NtGdiGetTextCharsetInfo(
         }
         _SEH2_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
         {
-            Status = _SEH2_GetExceptionCode();
+            SetLastNtError(_SEH2_GetExceptionCode());
+            Ret = DEFAULT_CHARSET;
         }
         _SEH2_END;
-
-        if (!NT_SUCCESS(Status))
-        {
-            SetLastNtError(Status);
-            return DEFAULT_CHARSET;
-        }
     }
     DC_UnlockDc(Dc);
     return Ret;

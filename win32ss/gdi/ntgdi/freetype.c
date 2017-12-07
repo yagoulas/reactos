@@ -1352,14 +1352,7 @@ IntGdiCleanupPrivateFontsForProcess(VOID)
 BOOL FASTCALL
 IntIsFontRenderingEnabled(VOID)
 {
-    BOOL Ret = RenderingEnabled;
-    HDC hDC;
-
-    hDC = IntGetScreenDC();
-    if (hDC)
-        Ret = (NtGdiGetDeviceCaps(hDC, BITSPIXEL) > 8) && RenderingEnabled;
-
-    return Ret;
+    return (gpsi->BitsPixel > 8) && RenderingEnabled;
 }
 
 VOID FASTCALL
@@ -3645,11 +3638,10 @@ TextIntGetTextExtentPoint(PDC dc,
 INT
 FASTCALL
 ftGdiGetTextCharsetInfo(
-    PDC Dc,
+    PRFONT prfnt,
     LPFONTSIGNATURE lpSig,
     DWORD dwFlags)
 {
-    PRFONT prfnt;
     UINT Ret = DEFAULT_CHARSET;
     INT i;
     FONTSIGNATURE fs;
@@ -3659,12 +3651,6 @@ ftGdiGetTextCharsetInfo(
     DWORD cp, fs0;
     USHORT usACP, usOEM;
 
-    prfnt = DC_prfnt(Dc);
-    if (!prfnt)
-    {
-        EngSetLastError(ERROR_INVALID_HANDLE);
-        return Ret;
-    }
     Face = prfnt->SharedFace->Face;
 
     IntLockFreeType;

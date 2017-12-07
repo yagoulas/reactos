@@ -357,8 +357,14 @@ IntGetFontLanguageInfo(PDC Dc)
 		GCP_REORDER_MASK=0x00000060;
 
   DWORD result=0;
+  PRFONT prfnt = DC_prfnt(Dc);
+  if (!prfnt)
+  {
+      EngSetLastError(ERROR_INVALID_HANDLE);
+      return 0;
+  }
 
-  ftGdiGetTextCharsetInfo( Dc, &fontsig, 0 );
+  ftGdiGetTextCharsetInfo( prfnt, &fontsig, 0 );
 
  /* We detect each flag we return using a bitmask on the Codepage Bitfields */
   if( (fontsig.fsCsb[0]&GCP_DBCS_MASK)!=0 )
