@@ -135,15 +135,9 @@ typedef struct _SHARED_FACE {
 
 typedef struct _FONTGDI {
   FONTOBJ       FontObj;
-  ULONG         iUnique;
   FLONG         flType;
 
-  DHPDEV        dhpdev;
   PSHARED_FACE  SharedFace;
-
-  LONG          lMaxNegA;
-  LONG          lMaxNegC;
-  LONG          lMinWidthD;
 
   LPWSTR        Filename;
   BYTE          RequestUnderline;
