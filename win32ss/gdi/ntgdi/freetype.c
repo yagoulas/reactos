@@ -1386,9 +1386,9 @@ IntEnableFontRendering(BOOL Enable)
 }
 
 FT_Render_Mode FASTCALL
-IntGetFontRenderMode(LOGFONTW *logfont)
+IntGetFontRenderMode(PRFONT prfnt)
 {
-    switch (logfont->lfQuality)
+    switch (prfnt->lfQuality)
     {
     case ANTIALIASED_QUALITY:
         break;
@@ -1415,7 +1415,6 @@ TextIntCreateFontIndirect(CONST LPLOGFONTW lf, HFONT *NewFont)
         return STATUS_NO_MEMORY;
     }
 
-    ExInitializePushLock(&plfont->lock);
     *NewFont = plfont->BaseObject.hHmgr;
     plf = &plfont->logfont.elfEnumLogfontEx.elfLogFont;
     RtlCopyMemory(plf, lf, sizeof(LOGFONTW));
@@ -1761,9 +1760,9 @@ IntGetFontLocalizedName(PUNICODE_STRING pNameW, PSHARED_FACE SharedFace,
  *
  */
 INT FASTCALL
-IntGetOutlineTextMetrics(PFONTGDI FontGDI,
-                         UINT Size,
-                         OUTLINETEXTMETRICW *Otm)
+ftGetOutlineTextMetrics(PFONTGDI FontGDI,
+                        UINT Size,
+                        OUTLINETEXTMETRICW *Otm)
 {
     TT_OS2 *pOS2;
     TT_HoriHeader *pHori;
@@ -1929,6 +1928,15 @@ IntGetOutlineTextMetrics(PFONTGDI FontGDI,
     RtlFreeUnicodeString(&FullNameW);
 
     return Cache->OutlineRequiredSize;
+}
+
+INT FASTCALL
+IntGetOutlineTextMetrics(PRFONT prfnt,
+                         UINT Size,
+                         OUTLINETEXTMETRICW *Otm)
+{
+  PFONTGDI FontGDI = ObjToGDI(prfnt->Font, FONT);
+  return ftGetOutlineTextMetrics(FontGDI, Size, Otm);
 }
 
 static PFONTGDI FASTCALL
@@ -2256,13 +2264,13 @@ FontFamilyFillInfo(PFONTFAMILYINFO Info, LPCWSTR FaceName,
 
     RtlInitUnicodeString(&NameW, NULL);
     RtlZeroMemory(Info, sizeof(FONTFAMILYINFO));
-    Size = IntGetOutlineTextMetrics(FontGDI, 0, NULL);
+    Size = ftGetOutlineTextMetrics(FontGDI, 0, NULL);
     Otm = ExAllocatePoolWithTag(PagedPool, Size, GDITAG_TEXT);
     if (!Otm)
     {
         return;
     }
-    Size = IntGetOutlineTextMetrics(FontGDI, Size, Otm);
+    Size = ftGetOutlineTextMetrics(FontGDI, Size, Otm);
     if (!Size)
     {
         ExFreePoolWithTag(Otm, GDITAG_TEXT);
@@ -2982,9 +2990,13 @@ static unsigned int get_bezier_glyph_outline(FT_Outline *outline, unsigned int b
 }
 
 static INT
-IntRequestFontSize(PDC dc, FT_Face face, LONG Width, LONG Height)
+IntRequestFontSize(PRFONT prfnt)
 {
     FT_Size_RequestRec  req;
+
+    PFONTGDI FontGDI = ObjToGDI(prfnt->Font, FONT);
+    LONG Width = prfnt->lfWidth;
+    LONG Height = prfnt->lfHeight;
 
     if (Width < 0)
         Width = -Width;
@@ -2995,7 +3007,7 @@ IntRequestFontSize(PDC dc, FT_Face face, LONG Width, LONG Height)
     }
     if (Height == 0)
     {
-        Height = dc->ppdev->devinfo.lfDefaultFont.lfHeight;
+        Height = prfnt->hdevConsumer->devinfo.lfDefaultFont.lfHeight;
     }
     if (Height == 0)
     {
@@ -3015,20 +3027,15 @@ IntRequestFontSize(PDC dc, FT_Face face, LONG Width, LONG Height)
     req.height         = (FT_Long)(Height << 6);
     req.horiResolution = 0;
     req.vertResolution = 0;
-    return FT_Request_Size(face, &req);
+    return FT_Request_Size(FontGDI->SharedFace->Face, &req);
 }
 
-BOOL
-FASTCALL
-TextIntUpdateSize(PDC dc,
-                  PTEXTOBJ TextObj,
-                  PFONTGDI FontGDI,
-                  BOOL bDoLock)
+BOOL TextIntUpdateSize(PRFONT prfnt, BOOL bDoLock)
 {
     FT_Face face;
     INT error, n;
     FT_CharMap charmap, found;
-    LOGFONTW *plf;
+    PFONTGDI FontGDI = ObjToGDI(prfnt->Font, FONT);
 
     if (bDoLock)
         IntLockFreeType;
@@ -3064,9 +3071,7 @@ TextIntUpdateSize(PDC dc,
         }
     }
 
-    plf = &TextObj->logfont.elfEnumLogfontEx.elfLogFont;
-
-    error = IntRequestFontSize(dc, face, plf->lfWidth, plf->lfHeight);
+    error = IntRequestFontSize(prfnt);
 
     if (bDoLock)
         IntUnLockFreeType;
@@ -3098,10 +3103,8 @@ ftGdiGetGlyphOutline(
     BOOL bIgnoreRotation)
 {
     static const FT_Matrix identityMat = {(1 << 16), 0, 0, (1 << 16)};
-    PDC_ATTR pdcattr;
-    PTEXTOBJ TextObj;
+    PRFONT prfnt;
     PFONTGDI FontGDI;
-    HFONT hFont = 0;
     GLYPHMETRICS gm;
     ULONG Size;
     FT_Face ft_face;
@@ -3120,53 +3123,43 @@ ftGdiGetGlyphOutline(
     INT adv, lsb, bbx; /* These three hold to widths of the unrotated chars */
     OUTLINETEXTMETRICW *potm;
     XFORM xForm;
-    LOGFONTW *plf;
 
     DPRINT("%u, %08x, %p, %08lx, %p, %p\n", wch, iFormat, pgm,
            cjBuf, pvBuf, pmat2);
 
-    pdcattr = dc->pdcattr;
-
     MatrixS2XForm(&xForm, &dc->pdcattr->mxWorldToDevice);
     eM11 = xForm.eM11;
 
-    hFont = pdcattr->hlfntNew;
-    TextObj = RealizeFontInit(hFont);
-
-    if (!TextObj)
+    prfnt = DC_prfnt(dc);
+    if (!prfnt)
     {
         EngSetLastError(ERROR_INVALID_HANDLE);
         return GDI_ERROR;
     }
-    FontGDI = ObjToGDI(TextObj->Font, FONT);
+    FontGDI = ObjToGDI(prfnt->Font, FONT);
     ft_face = FontGDI->SharedFace->Face;
 
-    plf = &TextObj->logfont.elfEnumLogfontEx.elfLogFont;
-    aveWidth = FT_IS_SCALABLE(ft_face) ? abs(plf->lfWidth) : 0;
-    orientation = FT_IS_SCALABLE(ft_face) ? plf->lfOrientation : 0;
+    aveWidth = FT_IS_SCALABLE(ft_face) ? abs(prfnt->lfWidth) : 0;
+    orientation = FT_IS_SCALABLE(ft_face) ? prfnt->lfOrientation : 0;
 
-    Size = IntGetOutlineTextMetrics(FontGDI, 0, NULL);
+    Size = ftGetOutlineTextMetrics(FontGDI, 0, NULL);
     potm = ExAllocatePoolWithTag(PagedPool, Size, GDITAG_TEXT);
     if (!potm)
     {
         EngSetLastError(ERROR_NOT_ENOUGH_MEMORY);
-        TEXTOBJ_UnlockText(TextObj);
         return GDI_ERROR;
     }
-    Size = IntGetOutlineTextMetrics(FontGDI, Size, potm);
+    Size = ftGetOutlineTextMetrics(FontGDI, Size, potm);
     if (!Size)
     {
         /* FIXME: last error? */
         ExFreePoolWithTag(potm, GDITAG_TEXT);
-        TEXTOBJ_UnlockText(TextObj);
         return GDI_ERROR;
     }
 
     IntLockFreeType;
-    TextIntUpdateSize(dc, TextObj, FontGDI, FALSE);
+    TextIntUpdateSize(prfnt, FALSE);
     FtSetCoordinateTransform(ft_face, DC_pmxWorldToDevice(dc));
-
-    TEXTOBJ_UnlockText(TextObj);
 
     if (iFormat & GGO_GLYPH_INDEX)
     {
@@ -3548,7 +3541,7 @@ ftGdiGetGlyphOutline(
 BOOL
 FASTCALL
 TextIntGetTextExtentPoint(PDC dc,
-                          PTEXTOBJ TextObj,
+                          PRFONT prfnt,
                           LPCWSTR String,
                           INT Count,
                           ULONG MaxExtent,
@@ -3567,11 +3560,10 @@ TextIntGetTextExtentPoint(PDC dc,
     FT_Render_Mode RenderMode;
     BOOLEAN Render;
     PMATRIX pmxWorldToDevice;
-    LOGFONTW *plf;
     BOOL EmuBold, EmuItalic;
     LONG ascender, descender;
 
-    FontGDI = ObjToGDI(TextObj->Font, FONT);
+    FontGDI = ObjToGDI(prfnt->Font, FONT);
 
     face = FontGDI->SharedFace->Face;
     if (NULL != Fit)
@@ -3581,15 +3573,14 @@ TextIntGetTextExtentPoint(PDC dc,
 
     IntLockFreeType;
 
-    TextIntUpdateSize(dc, TextObj, FontGDI, FALSE);
+    TextIntUpdateSize(prfnt, FALSE);
 
-    plf = &TextObj->logfont.elfEnumLogfontEx.elfLogFont;
-    EmuBold = (plf->lfWeight >= FW_BOLD && FontGDI->OriginalWeight <= FW_NORMAL);
-    EmuItalic = (plf->lfItalic && !FontGDI->OriginalItalic);
+    EmuBold = (prfnt->lfWeight >= FW_BOLD && FontGDI->OriginalWeight <= FW_NORMAL);
+    EmuItalic = (prfnt->lfItalic && !FontGDI->OriginalItalic);
 
     Render = IntIsFontRenderingEnabled();
     if (Render)
-        RenderMode = IntGetFontRenderMode(plf);
+        RenderMode = IntGetFontRenderMode(prfnt);
     else
         RenderMode = FT_RENDER_MODE_MONO;
 
@@ -3610,7 +3601,7 @@ TextIntGetTextExtentPoint(PDC dc,
         if (EmuBold || EmuItalic)
             realglyph = NULL;
         else
-            realglyph = ftGdiGlyphCacheGet(face, glyph_index, plf->lfHeight,
+            realglyph = ftGdiGlyphCacheGet(face, glyph_index, prfnt->lfHeight,
                                            RenderMode, pmxWorldToDevice);
 
         if (EmuBold || EmuItalic || !realglyph)
@@ -3635,7 +3626,7 @@ TextIntGetTextExtentPoint(PDC dc,
             {
                 realglyph = ftGdiGlyphCacheSet(face,
                                                glyph_index,
-                                               plf->lfHeight,
+                                               prfnt->lfHeight,
                                                pmxWorldToDevice,
                                                glyph,
                                                RenderMode);
@@ -3694,11 +3685,9 @@ ftGdiGetTextCharsetInfo(
     LPFONTSIGNATURE lpSig,
     DWORD dwFlags)
 {
-    PDC_ATTR pdcattr;
+    PRFONT prfnt;
     UINT Ret = DEFAULT_CHARSET;
     INT i;
-    HFONT hFont;
-    PTEXTOBJ TextObj;
     PFONTGDI FontGdi;
     FONTSIGNATURE fs;
     TT_OS2 *pOS2;
@@ -3707,18 +3696,14 @@ ftGdiGetTextCharsetInfo(
     DWORD cp, fs0;
     USHORT usACP, usOEM;
 
-    pdcattr = Dc->pdcattr;
-    hFont = pdcattr->hlfntNew;
-    TextObj = RealizeFontInit(hFont);
-
-    if (!TextObj)
+    prfnt = DC_prfnt(Dc);
+    if (!prfnt)
     {
         EngSetLastError(ERROR_INVALID_HANDLE);
         return Ret;
     }
-    FontGdi = ObjToGDI(TextObj->Font, FONT);
+    FontGdi = ObjToGDI(prfnt->Font, FONT);
     Face = FontGdi->SharedFace->Face;
-    TEXTOBJ_UnlockText(TextObj);
 
     IntLockFreeType;
     pOS2 = FT_Get_Sfnt_Table(Face, ft_sfnt_os2);
@@ -3801,11 +3786,12 @@ Exit:
 
 DWORD
 FASTCALL
-ftGetFontUnicodeRanges(PFONTGDI Font, PGLYPHSET glyphset)
+ftGetFontUnicodeRanges(PRFONT prfnt, PGLYPHSET glyphset)
 {
     DWORD size = 0;
     DWORD num_ranges = 0;
-    FT_Face face = Font->SharedFace->Face;
+    PFONTGDI FontGDI = ObjToGDI(prfnt->Font, FONT);
+    FT_Face face = FontGDI->SharedFace->Face;
 
     if (face->charmap->encoding == FT_ENCODING_UNICODE)
     {
@@ -3874,8 +3860,7 @@ ftGdiGetTextMetricsW(
     PTMW_INTERNAL ptmwi)
 {
     PDC dc;
-    PDC_ATTR pdcattr;
-    PTEXTOBJ TextObj;
+    PRFONT prfnt;
     PFONTGDI FontGDI;
     FT_Face Face;
     TT_OS2 *pOS2;
@@ -3883,7 +3868,6 @@ ftGdiGetTextMetricsW(
     FT_WinFNT_HeaderRec Win;
     ULONG Error;
     NTSTATUS Status = STATUS_SUCCESS;
-    LOGFONTW *plf;
 
     if (!ptmwi)
     {
@@ -3896,16 +3880,14 @@ ftGdiGetTextMetricsW(
         EngSetLastError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
-    pdcattr = dc->pdcattr;
-    TextObj = RealizeFontInit(pdcattr->hlfntNew);
-    if (NULL != TextObj)
+    prfnt = DC_prfnt(dc);
+    if (NULL != prfnt)
     {
-        plf = &TextObj->logfont.elfEnumLogfontEx.elfLogFont;
-        FontGDI = ObjToGDI(TextObj->Font, FONT);
+        FontGDI = ObjToGDI(prfnt->Font, FONT);
 
         Face = FontGDI->SharedFace->Face;
         IntLockFreeType;
-        Error = IntRequestFontSize(dc, Face, plf->lfWidth, plf->lfHeight);
+        Error = IntRequestFontSize(prfnt);
         FtSetCoordinateTransform(Face, DC_pmxWorldToDevice(dc));
         IntUnLockFreeType;
         if (0 != Error)
@@ -3945,7 +3927,6 @@ ftGdiGetTextMetricsW(
                 RtlZeroMemory(&ptmwi->Diff, sizeof(ptmwi->Diff));
             }
         }
-        TEXTOBJ_UnlockText(TextObj);
     }
     else
     {
@@ -3964,13 +3945,14 @@ ftGdiGetTextMetricsW(
 DWORD
 FASTCALL
 ftGdiGetFontData(
-    PFONTGDI FontGdi,
+    PRFONT prfnt,
     DWORD Table,
     DWORD Offset,
     PVOID Buffer,
     DWORD Size)
 {
     DWORD Result = GDI_ERROR;
+    PFONTGDI FontGdi = ObjToGDI(prfnt->Font, FONT);
     FT_Face Face = FontGdi->SharedFace->Face;
 
     IntLockFreeType;
@@ -4378,7 +4360,7 @@ FindBestFontFromList(FONTOBJ **FontObj, ULONG *MatchPenalty,
         Face = FontGDI->SharedFace->Face;
 
         /* get text metrics */
-        OtmSize = IntGetOutlineTextMetrics(FontGDI, 0, NULL);
+        OtmSize = ftGetOutlineTextMetrics(FontGDI, 0, NULL);
         if (OtmSize > OldOtmSize)
         {
             if (Otm)
@@ -4389,7 +4371,7 @@ FindBestFontFromList(FONTOBJ **FontObj, ULONG *MatchPenalty,
         /* update FontObj if lowest penalty */
         if (Otm)
         {
-            OtmSize = IntGetOutlineTextMetrics(FontGDI, OtmSize, Otm);
+            OtmSize = ftGetOutlineTextMetrics(FontGDI, OtmSize, Otm);
             if (!OtmSize)
                 continue;
 
@@ -4409,69 +4391,50 @@ FindBestFontFromList(FONTOBJ **FontObj, ULONG *MatchPenalty,
 }
 
 static
-VOID
+FLONG
 FASTCALL
 IntFontType(PFONTGDI Font)
 {
     PS_FontInfoRec psfInfo;
     FT_ULong tmp_size = 0;
     FT_Face Face = Font->SharedFace->Face;
+    FLONG ret = 0;
 
     if (FT_HAS_MULTIPLE_MASTERS(Face))
-        Font->FontObj.flFontType |= FO_MULTIPLEMASTER;
+        ret |= FO_MULTIPLEMASTER;
     if (FT_HAS_VERTICAL(Face))
-        Font->FontObj.flFontType |= FO_VERT_FACE;
+        ret |= FO_VERT_FACE;
     if (!FT_IS_SCALABLE(Face))
-        Font->FontObj.flFontType |= FO_TYPE_RASTER;
+        ret |= FO_TYPE_RASTER;
     if (FT_IS_SFNT(Face))
     {
-        Font->FontObj.flFontType |= FO_TYPE_TRUETYPE;
+        ret |= FO_TYPE_TRUETYPE;
         if (FT_Get_Sfnt_Table(Face, ft_sfnt_post))
-            Font->FontObj.flFontType |= FO_POSTSCRIPT;
+            ret |= FO_POSTSCRIPT;
     }
     if (!FT_Get_PS_Font_Info(Face, &psfInfo ))
     {
-        Font->FontObj.flFontType |= FO_POSTSCRIPT;
+        ret |= FO_POSTSCRIPT;
     }
     /* Check for the presence of the 'CFF ' table to check if the font is Type1 */
     if (!FT_Load_Sfnt_Table(Face, TTAG_CFF, 0, NULL, &tmp_size))
     {
-        Font->FontObj.flFontType |= (FO_CFF|FO_POSTSCRIPT);
+        ret |= (FO_CFF|FO_POSTSCRIPT);
     }
+    return ret;
 }
 
-NTSTATUS
-FASTCALL
-TextIntRealizeFont(HFONT FontHandle, PTEXTOBJ pTextObj)
+PRFONT LFONT_Realize(PLFONT pLFont, PPDEVOBJ hdevConsumer, DHPDEV dhpdev)
 {
-    NTSTATUS Status = STATUS_SUCCESS;
-    PTEXTOBJ TextObj;
     PPROCESSINFO Win32Process;
-    ULONG MatchPenalty;
     LOGFONTW *pLogFont;
     LOGFONTW SubstitutedLogFont;
     FT_Face Face;
+    ULONG MatchPenalty;
+    FONTOBJ *pFontObj;
+    PRFONT prfnt;
 
-    if (!pTextObj)
-    {
-        TextObj = TEXTOBJ_LockText(FontHandle);
-        if (NULL == TextObj)
-        {
-            return STATUS_INVALID_HANDLE;
-        }
-
-        if (TextObj->fl & TEXTOBJECT_INIT)
-        {
-            TEXTOBJ_UnlockText(TextObj);
-            return STATUS_SUCCESS;
-        }
-    }
-    else
-    {
-        TextObj = pTextObj;
-    }
-
-    pLogFont = &TextObj->logfont.elfEnumLogfontEx.elfLogFont;
+    pLogFont = &pLFont->logfont.elfEnumLogfontEx.elfLogFont;
 
     /* substitute */
     SubstitutedLogFont = *pLogFont;
@@ -4480,62 +4443,67 @@ TextIntRealizeFont(HFONT FontHandle, PTEXTOBJ pTextObj)
     DPRINT("'%S,%u'.\n", SubstitutedLogFont.lfFaceName, SubstitutedLogFont.lfCharSet);
 
     MatchPenalty = 0xFFFFFFFF;
-    TextObj->Font = NULL;
 
     Win32Process = PsGetCurrentProcessWin32Process();
 
     /* Search private fonts */
     IntLockProcessPrivateFonts(Win32Process);
-    FindBestFontFromList(&TextObj->Font, &MatchPenalty, &SubstitutedLogFont,
+    FindBestFontFromList(&pFontObj, &MatchPenalty, &SubstitutedLogFont,
                          &Win32Process->PrivateFontListHead);
     IntUnLockProcessPrivateFonts(Win32Process);
 
     /* Search system fonts */
     IntLockGlobalFonts;
-    FindBestFontFromList(&TextObj->Font, &MatchPenalty, &SubstitutedLogFont,
+    FindBestFontFromList(&pFontObj, &MatchPenalty, &SubstitutedLogFont,
                          &FontListHead);
     IntUnLockGlobalFonts;
 
-    if (NULL == TextObj->Font)
+    if (!pFontObj)
     {
         DPRINT1("Request font %S not found, no fonts loaded at all\n",
                 pLogFont->lfFaceName);
-        Status = STATUS_NOT_FOUND;
+        prfnt = NULL;
     }
     else
     {
-        PFONTGDI FontGdi = ObjToGDI(TextObj->Font, FONT);
-        // Need hdev, when freetype is loaded need to create DEVOBJ for
-        // Consumer and Producer.
-        TextObj->Font->iUniq = 1; // Now it can be cached.
-        IntFontType(FontGdi);
-        FontGdi->flType = TextObj->Font->flFontType;
-        FontGdi->RequestUnderline = pLogFont->lfUnderline ? 0xFF : 0;
-        FontGdi->RequestStrikeOut = pLogFont->lfStrikeOut ? 0xFF : 0;
-        FontGdi->RequestItalic = pLogFont->lfItalic ? 0xFF : 0;
-        if (pLogFont->lfWeight != FW_DONTCARE)
-            FontGdi->RequestWeight = pLogFont->lfWeight;
-        else
-            FontGdi->RequestWeight = FW_NORMAL;
+        prfnt = RFONT_Alloc();
+        if (prfnt)
+        {
+            PFONTGDI FontGdi = ObjToGDI(prfnt->Font, FONT);
+            prfnt->Font->iUniq = 1; // Now it can be cached.
+            prfnt->lfHeight = pLogFont->lfHeight;
+            prfnt->lfWidth = pLogFont->lfWidth;
+            prfnt->lfOrientation = pLogFont->lfOrientation;
+            prfnt->lfWeight = pLogFont->lfWeight;
+            prfnt->lfItalic = pLogFont->lfItalic;
+            prfnt->lfUnderline = pLogFont->lfUnderline;
+            prfnt->lfStrikeOut = pLogFont->lfStrikeOut;
+            prfnt->lfQuality = pLogFont->lfQuality;
+            prfnt->hdevConsumer = hdevConsumer;
+            prfnt->dhpdev = dhpdev;
 
-        Face = FontGdi->SharedFace->Face;
+            FontGdi->flType = IntFontType(FontGdi);
+            FontGdi->RequestUnderline = pLogFont->lfUnderline ? 0xFF : 0;
+            FontGdi->RequestStrikeOut = pLogFont->lfStrikeOut ? 0xFF : 0;
+            FontGdi->RequestItalic = pLogFont->lfItalic ? 0xFF : 0;
+            if (pLogFont->lfWeight != FW_DONTCARE)
+                FontGdi->RequestWeight = pLogFont->lfWeight;
+            else
+                FontGdi->RequestWeight = FW_NORMAL;
 
-        //FontGdi->OriginalWeight = WeightFromStyle(Face->style_name);
+            Face = FontGdi->SharedFace->Face;
 
-        if (!FontGdi->OriginalItalic)
-            FontGdi->OriginalItalic = ItalicFromStyle(Face->style_name);
+            //FontGdi->OriginalWeight = WeightFromStyle(Face->style_name);
 
-        TextObj->fl |= TEXTOBJECT_INIT;
-        Status = STATUS_SUCCESS;
+            if (!FontGdi->OriginalItalic)
+                FontGdi->OriginalItalic = ItalicFromStyle(Face->style_name);
+
+        }
     }
 
-    if (!pTextObj) TEXTOBJ_UnlockText(TextObj);
 
-    ASSERT((NT_SUCCESS(Status) ^ (NULL == TextObj->Font)) != 0);
-
-    return Status;
+    return prfnt;
 }
-
 
 static
 BOOL
@@ -4891,8 +4859,9 @@ IntGdiGetFontResourceInfo(
 
 BOOL
 FASTCALL
-ftGdiRealizationInfo(PFONTGDI Font, PREALIZATION_INFO Info)
+ftGdiRealizationInfo(PRFONT prfnt, PREALIZATION_INFO Info)
 {
+    PFONTGDI Font = ObjToGDI(prfnt->Font, FONT);
     if (FT_HAS_FIXED_SIZES(Font->SharedFace->Face))
         Info->iTechnology = RI_TECH_BITMAP;
     else
@@ -4907,16 +4876,19 @@ ftGdiRealizationInfo(PFONTGDI Font, PREALIZATION_INFO Info)
     return TRUE;
 }
 
-
 DWORD
 FASTCALL
-ftGdiGetKerningPairs( PFONTGDI Font,
+ftGdiGetKerningPairs( PRFONT prfnt,
                       DWORD cPairs,
                       LPKERNINGPAIR pKerningPair)
 {
     DWORD Count = 0;
     INT i = 0;
-    FT_Face face = Font->SharedFace->Face;
+    PFONTGDI FontGDI;
+    FT_Face face;
+
+    FontGDI = ObjToGDI(prfnt->Font, FONT);
+    face = FontGDI->SharedFace->Face;
 
     if (FT_HAS_KERNING(face) && face->charmap->encoding == FT_ENCODING_UNICODE)
     {
@@ -5089,9 +5061,8 @@ GreExtTextOutW(
     SURFOBJ *SourceGlyphSurf;
     SIZEL bitSize;
     INT yoff;
-    FONTOBJ *FontObj;
+    PRFONT prfnt;
     PFONTGDI FontGDI;
-    PTEXTOBJ TextObj = NULL;
     EXLATEOBJ exloRGB2Dst, exloDst2RGB;
     FT_Render_Mode RenderMode;
     BOOLEAN Render;
@@ -5101,7 +5072,6 @@ GreExtTextOutW(
     PMATRIX pmxWorldToDevice;
     LONG fixAscender, fixDescender;
     FLOATOBJ Scale;
-    LOGFONTW *plf;
     BOOL EmuBold, EmuItalic;
     int thickness;
     BOOL bResult;
@@ -5225,31 +5195,28 @@ GreExtTextOutW(
         }
     }
 
-    TextObj = RealizeFontInit(pdcattr->hlfntNew);
-    if (TextObj == NULL)
+    prfnt = DC_prfnt(dc);
+    if (prfnt == NULL)
     {
         bResult = FALSE;
         goto Cleanup;
     }
 
-    FontObj = TextObj->Font;
-    ASSERT(FontObj);
-    FontGDI = ObjToGDI(FontObj, FONT);
+    FontGDI = ObjToGDI(prfnt, FONT);
     ASSERT(FontGDI);
 
     IntLockFreeType;
     face = FontGDI->SharedFace->Face;
 
-    plf = &TextObj->logfont.elfEnumLogfontEx.elfLogFont;
-    EmuBold = (plf->lfWeight >= FW_BOLD && FontGDI->OriginalWeight <= FW_NORMAL);
-    EmuItalic = (plf->lfItalic && !FontGDI->OriginalItalic);
+    EmuBold = (prfnt->lfWeight >= FW_BOLD && FontGDI->OriginalWeight <= FW_NORMAL);
+    EmuItalic = (prfnt->lfItalic && !FontGDI->OriginalItalic);
 
     if (Render)
-        RenderMode = IntGetFontRenderMode(plf);
+        RenderMode = IntGetFontRenderMode(prfnt);
     else
         RenderMode = FT_RENDER_MODE_MONO;
 
-    if (!TextIntUpdateSize(dc, TextObj, FontGDI, FALSE))
+    if (!TextIntUpdateSize(prfnt, FALSE))
     {
         IntUnLockFreeType;
         bResult = FALSE;
@@ -5322,7 +5289,7 @@ GreExtTextOutW(
             if (EmuBold || EmuItalic)
                 realglyph = NULL;
             else
-                realglyph = ftGdiGlyphCacheGet(face, glyph_index, plf->lfHeight,
+                realglyph = ftGdiGlyphCacheGet(face, glyph_index, prfnt->lfHeight,
                                                RenderMode, pmxWorldToDevice);
             if (!realglyph)
             {
@@ -5345,7 +5312,7 @@ GreExtTextOutW(
                 {
                     realglyph = ftGdiGlyphCacheSet(face,
                                                    glyph_index,
-                                                   plf->lfHeight,
+                                                   prfnt->lfHeight,
                                                    pmxWorldToDevice,
                                                    glyph,
                                                    RenderMode);
@@ -5411,7 +5378,7 @@ GreExtTextOutW(
             thickness = 1;
     }
 
-    if ((fuOptions & ETO_OPAQUE) && plf->lfItalic)
+    if ((fuOptions & ETO_OPAQUE) && prfnt->lfItalic)
     {
         /* Draw background */
         TextLeft = RealXStart;
@@ -5545,7 +5512,7 @@ GreExtTextOutW(
         if (EmuBold || EmuItalic)
             realglyph = NULL;
         else
-            realglyph = ftGdiGlyphCacheGet(face, glyph_index, plf->lfHeight,
+            realglyph = ftGdiGlyphCacheGet(face, glyph_index, prfnt->lfHeight,
                                            RenderMode, pmxWorldToDevice);
         if (!realglyph)
         {
@@ -5570,7 +5537,7 @@ GreExtTextOutW(
             {
                 realglyph = ftGdiGlyphCacheSet(face,
                                                glyph_index,
-                                               plf->lfHeight,
+                                               prfnt->lfHeight,
                                                pmxWorldToDevice,
                                                glyph,
                                                RenderMode);
@@ -5594,7 +5561,7 @@ GreExtTextOutW(
         DPRINT("TextTop: %lu\n", TextTop);
         DPRINT("Advance: %d\n", realglyph->root.advance.x);
 
-        if ((fuOptions & ETO_OPAQUE) && !plf->lfItalic)
+        if ((fuOptions & ETO_OPAQUE) && !prfnt->lfItalic)
         {
             DestRect.left = BackgroundLeft;
             DestRect.right = (TextLeft + (realglyph->root.advance.x >> 10) + 32) >> 6;
@@ -5712,7 +5679,7 @@ GreExtTextOutW(
             break;
         }
 
-        if (plf->lfUnderline)
+        if (prfnt->lfUnderline)
         {
             int i, position;
             if (!face->units_per_EM)
@@ -5737,7 +5704,7 @@ GreExtTextOutW(
                           ROP2_TO_MIX(R2_COPYPEN));
             }
         }
-        if (plf->lfStrikeOut)
+        if (prfnt->lfStrikeOut)
         {
             int i;
             for (i = -thickness / 2; i < -thickness / 2 + thickness; ++i)
@@ -5798,10 +5765,6 @@ GreExtTextOutW(
 Cleanup:
 
     DC_vFinishBlit(dc, NULL);
-
-    if (TextObj != NULL)
-        TEXTOBJ_UnlockText(TextObj);
-
     DC_UnlockDc(dc);
 
     return bResult;
@@ -5946,17 +5909,14 @@ NtGdiGetCharABCWidthsW(
     LPABC SafeBuff;
     LPABCFLOAT SafeBuffF = NULL;
     PDC dc;
-    PDC_ATTR pdcattr;
-    PTEXTOBJ TextObj;
+    PRFONT prfnt;
     PFONTGDI FontGDI;
     FT_Face face;
     FT_CharMap charmap, found = NULL;
     UINT i, glyph_index, BufferSize;
-    HFONT hFont = 0;
     NTSTATUS Status = STATUS_SUCCESS;
     PMATRIX pmxWorldToDevice;
     PWCHAR Safepwch = NULL;
-    LOGFONTW *plf;
 
     if (!Buffer)
     {
@@ -6020,15 +5980,11 @@ NtGdiGetCharABCWidthsW(
         EngSetLastError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
-    pdcattr = dc->pdcattr;
-    hFont = pdcattr->hlfntNew;
-    TextObj = RealizeFontInit(hFont);
 
     /* Get the DC's world-to-device transformation matrix */
     pmxWorldToDevice = DC_pmxWorldToDevice(dc);
-    DC_UnlockDc(dc);
-
-    if (TextObj == NULL)
+    prfnt = DC_prfnt(dc);
+    if (prfnt == NULL)
     {
         ExFreePoolWithTag(SafeBuff, GDITAG_TEXT);
 
@@ -6036,10 +5992,13 @@ NtGdiGetCharABCWidthsW(
             ExFreePoolWithTag(Safepwch , GDITAG_TEXT);
 
         EngSetLastError(ERROR_INVALID_HANDLE);
+
+        DC_UnlockDc(dc);
+
         return FALSE;
     }
 
-    FontGDI = ObjToGDI(TextObj->Font, FONT);
+    FontGDI = ObjToGDI(prfnt->Font, FONT);
 
     face = FontGDI->SharedFace->Face;
     if (face->charmap == NULL)
@@ -6063,6 +6022,9 @@ NtGdiGetCharABCWidthsW(
                 ExFreePoolWithTag(Safepwch , GDITAG_TEXT);
 
             EngSetLastError(ERROR_INVALID_HANDLE);
+
+            DC_UnlockDc(dc);
+
             return FALSE;
         }
 
@@ -6071,10 +6033,10 @@ NtGdiGetCharABCWidthsW(
         IntUnLockFreeType;
     }
 
-    plf = &TextObj->logfont.elfEnumLogfontEx.elfLogFont;
     IntLockFreeType;
-    IntRequestFontSize(dc, face, plf->lfWidth, plf->lfHeight);
+    IntRequestFontSize(prfnt);
     FtSetCoordinateTransform(face, pmxWorldToDevice);
+    DC_UnlockDc(dc);
 
     for (i = FirstChar; i < FirstChar+Count; i++)
     {
@@ -6122,7 +6084,6 @@ NtGdiGetCharABCWidthsW(
         }
     }
     IntUnLockFreeType;
-    TEXTOBJ_UnlockText(TextObj);
     Status = MmCopyToCaller(Buffer, SafeBuff, BufferSize);
 
     ExFreePoolWithTag(SafeBuff, GDITAG_TEXT);
@@ -6153,20 +6114,16 @@ NtGdiGetCharWidthW(
     IN FLONG fl,
     OUT PVOID Buffer)
 {
-    NTSTATUS Status = STATUS_SUCCESS;
-    LPINT SafeBuff;
+    LPINT SafeBuff = NULL;
     PFLOAT SafeBuffF = NULL;
-    PDC dc;
-    PDC_ATTR pdcattr;
-    PTEXTOBJ TextObj;
+    PDC dc = NULL;
+    PRFONT prfnt;
     PFONTGDI FontGDI;
     FT_Face face;
     FT_CharMap charmap, found = NULL;
     UINT i, glyph_index, BufferSize;
-    HFONT hFont = 0;
     PMATRIX pmxWorldToDevice;
     PWCHAR Safepwc = NULL;
-    LOGFONTW *plf;
 
     if (UnSafepwc)
     {
@@ -6185,15 +6142,10 @@ NtGdiGetCharWidthW(
         }
         _SEH2_EXCEPT(EXCEPTION_EXECUTE_HANDLER)
         {
-            Status = _SEH2_GetExceptionCode();
+            EngSetLastError(_SEH2_GetExceptionCode());
+            _SEH2_YIELD(return FALSE);
         }
         _SEH2_END;
-    }
-
-    if (!NT_SUCCESS(Status))
-    {
-        EngSetLastError(Status);
-        return FALSE;
     }
 
     BufferSize = Count * sizeof(INT); // Same size!
@@ -6201,41 +6153,30 @@ NtGdiGetCharWidthW(
     if (!fl) SafeBuffF = (PFLOAT) SafeBuff;
     if (SafeBuff == NULL)
     {
-        if(Safepwc)
-            ExFreePoolWithTag(Safepwc, GDITAG_TEXT);
-
         EngSetLastError(ERROR_NOT_ENOUGH_MEMORY);
-        return FALSE;
+        goto cleanup;
     }
 
     dc = DC_LockDc(hDC);
     if (dc == NULL)
     {
-        if(Safepwc)
-            ExFreePoolWithTag(Safepwc, GDITAG_TEXT);
-
-        ExFreePoolWithTag(SafeBuff, GDITAG_TEXT);
         EngSetLastError(ERROR_INVALID_HANDLE);
-        return FALSE;
+        goto cleanup;
     }
-    pdcattr = dc->pdcattr;
-    hFont = pdcattr->hlfntNew;
-    TextObj = RealizeFontInit(hFont);
+
+    prfnt = DC_prfnt(dc);
+    
     /* Get the DC's world-to-device transformation matrix */
     pmxWorldToDevice = DC_pmxWorldToDevice(dc);
-    DC_UnlockDc(dc);
 
-    if (TextObj == NULL)
+    if (prfnt == NULL)
     {
-        if(Safepwc)
-            ExFreePoolWithTag(Safepwc, GDITAG_TEXT);
-
-        ExFreePoolWithTag(SafeBuff, GDITAG_TEXT);
         EngSetLastError(ERROR_INVALID_HANDLE);
-        return FALSE;
+        goto cleanup;
     }
 
-    FontGDI = ObjToGDI(TextObj->Font, FONT);
+    FontGDI = ObjToGDI(prfnt->Font, FONT);
+    DC_UnlockDc(dc);
 
     face = FontGDI->SharedFace->Face;
     if (face->charmap == NULL)
@@ -6253,13 +6194,8 @@ NtGdiGetCharWidthW(
         if (!found)
         {
             DPRINT1("WARNING: Could not find desired charmap!\n");
-
-            if(Safepwc)
-                ExFreePoolWithTag(Safepwc, GDITAG_TEXT);
-
-            ExFreePoolWithTag(SafeBuff, GDITAG_TEXT);
             EngSetLastError(ERROR_INVALID_HANDLE);
-            return FALSE;
+            goto cleanup;
         }
 
         IntLockFreeType;
@@ -6267,9 +6203,8 @@ NtGdiGetCharWidthW(
         IntUnLockFreeType;
     }
 
-    plf = &TextObj->logfont.elfEnumLogfontEx.elfLogFont;
     IntLockFreeType;
-    IntRequestFontSize(dc, face, plf->lfWidth, plf->lfHeight);
+    IntRequestFontSize(prfnt);
     FtSetCoordinateTransform(face, pmxWorldToDevice);
 
     for (i = FirstChar; i < FirstChar+Count; i++)
@@ -6295,13 +6230,17 @@ NtGdiGetCharWidthW(
             SafeBuff[i - FirstChar] = (face->glyph->advance.x + 32) >> 6;
     }
     IntUnLockFreeType;
-    TEXTOBJ_UnlockText(TextObj);
     MmCopyToCaller(Buffer, SafeBuff, BufferSize);
+
+cleanup:
+    if (dc)
+        DC_UnlockDc(dc);
 
     if(Safepwc)
         ExFreePoolWithTag(Safepwc, GDITAG_TEXT);
 
-    ExFreePoolWithTag(SafeBuff, GDITAG_TEXT);
+    if (SafeBuff)
+        ExFreePoolWithTag(SafeBuff, GDITAG_TEXT);
     return TRUE;
 }
 
@@ -6324,10 +6263,8 @@ NtGdiGetGlyphIndicesW(
     _In_ DWORD iMode)
 {
     PDC dc;
-    PDC_ATTR pdcattr;
-    PTEXTOBJ TextObj;
+    PRFONT prfnt;
     PFONTGDI FontGDI;
-    HFONT hFont = NULL;
     NTSTATUS Status = STATUS_SUCCESS;
     OUTLINETEXTMETRICW *potm;
     INT i;
@@ -6370,17 +6307,16 @@ NtGdiGetGlyphIndicesW(
     {
         return GDI_ERROR;
     }
-    pdcattr = dc->pdcattr;
-    hFont = pdcattr->hlfntNew;
-    TextObj = RealizeFontInit(hFont);
-    DC_UnlockDc(dc);
-    if (!TextObj)
+    
+    prfnt = DC_prfnt(dc);
+    if (!prfnt)
     {
+        DC_UnlockDc(dc);
         return GDI_ERROR;
     }
 
-    FontGDI = ObjToGDI(TextObj->Font, FONT);
-    TEXTOBJ_UnlockText(TextObj);
+    FontGDI = ObjToGDI(prfnt->Font, FONT);
+    DC_UnlockDc(dc);
 
     Buffer = ExAllocatePoolWithTag(PagedPool, cwc*sizeof(WORD), GDITAG_TEXT);
     if (!Buffer)
@@ -6402,14 +6338,14 @@ NtGdiGetGlyphIndicesW(
         }
         else
         {
-            Size = IntGetOutlineTextMetrics(FontGDI, 0, NULL);
+            Size = ftGetOutlineTextMetrics(FontGDI, 0, NULL);
             potm = ExAllocatePoolWithTag(PagedPool, Size, GDITAG_TEXT);
             if (!potm)
             {
                 cwc = GDI_ERROR;
                 goto ErrorRet;
             }
-            Size = IntGetOutlineTextMetrics(FontGDI, Size, potm);
+            Size = ftGetOutlineTextMetrics(FontGDI, Size, potm);
             if (Size)
                 DefChar = potm->otmTextMetrics.tmDefaultChar;
             ExFreePoolWithTag(potm, GDITAG_TEXT);
