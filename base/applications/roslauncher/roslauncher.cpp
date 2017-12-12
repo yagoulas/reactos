@@ -1,3 +1,5 @@
+#define WIN32_NO_STATUS
+
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
@@ -10,6 +12,9 @@
 #include <rosdlgs.h>
 #include <shlobj.h>
 #include <shellutils.h>
+#define NTOS_MODE_USER
+#include <ndk/rtlfuncs.h>
+#include <userenv.h>
 #include <strsafe.h>
 #include "resource.h"
 
@@ -36,7 +41,15 @@ public:
     bool bLogToFile;
     bool bLogToConsole;
     DWORD gflags;
+    PWSTR pEnvirnment;
 
+    CLauncher() :
+        bLogToFile(FALSE),
+        bLogToConsole(TRUE),
+        gflags(0),
+        pEnvirnment(NULL)
+    {
+    }
 
     bool Launch()
     {
@@ -54,7 +67,10 @@ public:
         PROCESS_INFORMATION pi2;
         STARTUPINFOW si2 = { 0 };
 
-        BOOL ret = CreateProcessW(NULL, loggerparams, NULL, NULL, FALSE, dwCreationFlags, NULL, 
+        if(pEnvirnment)
+            dwCreationFlags |= CREATE_UNICODE_ENVIRONMENT;
+
+        BOOL ret = CreateProcessW(NULL, loggerparams, NULL, NULL, FALSE, dwCreationFlags, pEnvirnment,
                              pStartDir, &si2, &pi2);
         if (!ret)
         {
@@ -356,13 +372,97 @@ class CEnvironmentPage : public CPropertyPageImpl<CEnvironmentPage>
 {
 private:
     CLauncher *m_launcher;
+    CListEditor m_editor;
+    PWSTR m_EnvBlock;
+    CSimpleArray<ListItem> m_items;
 public: 
     enum { IDD = IDD_LAUNCHER_ENVIRONMENT };
+
+    BEGIN_MSG_MAP(CEnvironmentPage)
+        MESSAGE_HANDLER(WM_INITDIALOG, OnInitDialog)
+        COMMAND_ID_HANDLER(IDC_ADD, OnAdd)
+        COMMAND_ID_HANDLER(IDC_EDIT, OnEdit)
+        COMMAND_ID_HANDLER(IDC_REMOVE, OnRemove)
+        COMMAND_CODE_HANDLER(LBN_DBLCLK, OnEdit)
+        CHAIN_MSG_MAP(CPropertyPageImpl<CEnvironmentPage>)
+    END_MSG_MAP()
 
     CEnvironmentPage(CLauncher *launcher):
         m_launcher(launcher)
     {
-            
+        m_EnvBlock = launcher->pEnvirnment;
+    }
+
+    LRESULT OnInitDialog(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled)
+    {
+        if (!m_EnvBlock)
+        {
+            CreateEnvironmentBlock((LPVOID *)&m_EnvBlock, NULL, TRUE);
+
+            PWCHAR psep, penv = (PWCHAR)m_EnvBlock;
+            WCHAR buffer[MAX_PATH];
+            while(*penv)
+            {
+                ListItem item;
+                StringCchCopy(buffer, MAX_PATH, penv);
+                psep = wcschr(buffer, L'=');
+                if(psep)
+                {
+                    *psep = NULL;
+                    psep++;
+                    item.Value = psep;
+                }
+                item.ValueName = buffer;
+                m_items.Add(item);
+                penv += wcslen(penv)+1;
+            }
+        }
+
+        m_editor.Init(GetDlgItem(IDC_ENVLIST), m_items, L"environment variable");
+        return TRUE;
+    }
+
+    LRESULT OnAdd(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL &bHandled)
+    {
+        ListItem newitem;
+        GetDlgItemText(IDC_NEWVAR, newitem.ValueName);
+        m_editor.AddItem(newitem);
+        return 0;
+    }
+
+    LRESULT OnEdit(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL &bHandled)
+    {
+        m_editor.EditItem();
+        return 0;
+    }
+
+    LRESULT OnRemove(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL &bHandled)
+    {
+        m_editor.RemoveItem();
+        return 0;
+    }
+
+    int OnApply()
+    {
+        if (m_EnvBlock)
+        {
+            RtlDestroyEnvironment(m_EnvBlock);
+            RtlCreateEnvironment(FALSE, &m_EnvBlock);
+            m_items = m_editor.m_items;
+            for (int i = 0; i < m_items.GetSize(); i++)
+            {
+                if (m_items[i].ValueName.GetLength() > 0)
+                {
+                    UNICODE_STRING Name, Value;
+                    RtlInitUnicodeString(&Name, m_items[i].ValueName.GetString());
+                    RtlInitUnicodeString(&Value, m_items[i].Value.GetString());
+                    RtlSetEnvironmentVariable(&m_EnvBlock, &Name, &Value);
+                }
+            }
+        }
+        m_launcher->pEnvirnment = m_EnvBlock;
+
+        return PSNRET_NOERROR;
     }
 };
 
