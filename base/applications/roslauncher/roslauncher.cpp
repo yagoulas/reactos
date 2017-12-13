@@ -38,6 +38,7 @@ public:
     CStringW strStartDir;
     CStringW strParams;
     CStringW strLogFileName;
+    CStringW strDbgChannels;
     bool bLogToFile;
     bool bLogToConsole;
     DWORD gflags;
@@ -66,6 +67,17 @@ public:
 
         PROCESS_INFORMATION pi2;
         STARTUPINFOW si2 = { 0 };
+
+        if (strDbgChannels.GetLength() > 0)
+        {
+            UNICODE_STRING Name, Value;
+            RtlInitUnicodeString(&Name, L"DEBUGCHANNEL");
+            RtlInitUnicodeString(&Value, strDbgChannels.GetString());
+            if (pEnvirnment)
+                RtlSetEnvironmentVariable(&pEnvirnment, &Name, &Value);
+            else
+                RtlSetEnvironmentVariable(NULL, &Name, &Value);
+        }
 
         if(pEnvirnment)
             dwCreationFlags |= CREATE_UNICODE_ENVIRONMENT;
@@ -647,7 +659,7 @@ public:
             channelsstr += L',';
         }
 
-        MessageBoxW(channelsstr.GetString(), L"Channels", 0);
+        m_launcher->strDbgChannels = channelsstr;
 
         return PSNRET_NOERROR;
     }
