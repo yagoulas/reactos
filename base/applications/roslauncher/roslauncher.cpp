@@ -18,6 +18,8 @@
 #include <strsafe.h>
 #include "resource.h"
 
+const GUID CLSID_CLayerUIPropPage = { 0x513D916F, 0x2A8E, 0x4F51, { 0xAE, 0xAB, 0x0C, 0xBC, 0x76, 0xFB, 0x1A, 0xF8 } };
+
 class CLauncherModule : public CComModule
 {
 public:
@@ -144,10 +146,61 @@ public:
 
 };
 
+static HRESULT CreateIDataObject(CComHeapPtr<ITEMIDLIST>& pidl, CComPtr<IDataObject>& dataObject, CStringW FileName)
+{
+    CComPtr<IShellFolder> desktopFolder;
+    HRESULT hr = SHGetDesktopFolder(&desktopFolder);
+    if (SUCCEEDED(hr))
+    {
+        hr = desktopFolder->ParseDisplayName(NULL, NULL, FileName.GetBuffer(), NULL, &pidl, NULL);
+        if (SUCCEEDED(hr))
+        {
+            CComPtr<IShellFolder> shellFolder;
+            PCUITEMID_CHILD childs;
+            hr = SHBindToParent(pidl, IID_PPV_ARG(IShellFolder, &shellFolder), &childs);
+            if (SUCCEEDED(hr))
+            {
+                hr = shellFolder->GetUIObjectOf(NULL, 1, &childs, IID_IDataObject, NULL, (PVOID*)&dataObject);
+            }
+        }
+    }
+    return hr;
+}
+
+HRESULT CreateAppCompatSheet(CStringW path, REFIID iid, void **ppvObject)
+{
+    HRESULT hr;
+    DWORD attrs = GetFileAttributes(path);
+    if (attrs == INVALID_FILE_ATTRIBUTES || ((attrs & FILE_ATTRIBUTE_DIRECTORY) != 0))
+    {
+        return E_FAIL;
+    }
+
+    CComHeapPtr<ITEMIDLIST> pidl;
+    CComPtr<IDataObject> dataObject;
+    hr = CreateIDataObject(pidl, dataObject, path);
+    if (FAILED(hr))
+        return hr;
+
+    CComPtr<IShellExtInit> pshellext;
+    hr = CoCreateInstance(CLSID_CLayerUIPropPage, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARG(IShellExtInit, &pshellext));
+    if (FAILED(hr))
+        return hr;
+
+    hr = pshellext->Initialize(pidl, dataObject, NULL);
+    if (FAILED(hr))
+        return hr;
+
+    return pshellext->QueryInterface(iid, ppvObject);
+}
+
 class CMainPage : public CPropertyPageImpl<CMainPage>
 {
 private:
     CLauncher *m_launcher;
+
+    HPROPSHEETPAGE m_hCompatSheet;
+    CComPtr<IShellPropSheetExt> m_CompatSheet;
 public: 
     enum { IDD = IDD_LAUNCHER_MAIN };
 
@@ -161,6 +214,24 @@ public:
         COMMAND_CODE_HANDLER(EN_CHANGE , OnEditChange)
         CHAIN_MSG_MAP(CPropertyPageImpl<CMainPage>)
     END_MSG_MAP()
+
+    static BOOL CALLBACK cb_AddPage(HPROPSHEETPAGE page, LPARAM lParam)
+    {
+        CMainPage* pthis = reinterpret_cast<CMainPage*>(lParam);
+        pthis->m_hCompatSheet = page;
+        pthis->GetParent().SendMessageW(PSM_ADDPAGE, 0, (LPARAM)page);
+        return TRUE;
+    }
+
+    HRESULT InitAppCompatSheet()
+    {
+        HRESULT hr = CreateAppCompatSheet(m_launcher->strExecutable, IID_PPV_ARG(IShellPropSheetExt, &m_CompatSheet));
+        if (SUCCEEDED(hr))
+        {
+            hr = m_CompatSheet->AddPages(cb_AddPage, reinterpret_cast<LPARAM>(this));
+        }
+        return hr;
+    }
 
     LRESULT OnBrowse(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL &bHandled)
     {
@@ -208,15 +279,29 @@ public:
         {
             KillTimer(TimerId);
             GetDlgItemText(IDC_EXECUTABLE, m_launcher->strExecutable);
-            m_launcher->ReadGFlags();
-            CheckDlgButton(IDC_LDRSNAPS, (m_launcher->gflags & 2) ? BST_CHECKED : 0);
-            CheckDlgButton(IDC_DPH, (m_launcher->gflags & 0x02000000) ? BST_CHECKED : 0);
+
+            DWORD attrs = GetFileAttributes(m_launcher->strExecutable);
+
+            if (attrs != INVALID_FILE_ATTRIBUTES && ((attrs & FILE_ATTRIBUTE_DIRECTORY) == 0))
+            { 
+                m_launcher->ReadGFlags();
+                CheckDlgButton(IDC_LDRSNAPS, (m_launcher->gflags & 2) ? BST_CHECKED : 0);
+                CheckDlgButton(IDC_DPH, (m_launcher->gflags & 0x02000000) ? BST_CHECKED : 0);
+
+                /* Recreate the app compat page */
+                if (m_hCompatSheet)
+                    GetParent().SendMessageW(PSM_REMOVEPAGE, 0, (LPARAM)m_hCompatSheet);
+                m_hCompatSheet = NULL;
+                m_CompatSheet = NULL;
+                InitAppCompatSheet();
+            }
         }
         return 0;
     }
 
     LRESULT OnInitDialog(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled)
     {
+        InitAppCompatSheet();
         m_launcher->ReadGFlags();
 
         SetDlgItemText(IDC_EXECUTABLE, m_launcher->strExecutable);
@@ -267,7 +352,8 @@ public:
     }    
     
     CMainPage(CLauncher *launcher):
-        m_launcher(launcher)
+        m_launcher(launcher),
+        m_hCompatSheet(NULL)
     {
     }
     
