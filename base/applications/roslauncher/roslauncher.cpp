@@ -12,6 +12,7 @@
 #include <rosdlgs.h>
 #include <shlobj.h>
 #include <shellutils.h>
+#include <shlwapi.h>
 #define NTOS_MODE_USER
 #include <ndk/rtlfuncs.h>
 #include <userenv.h>
@@ -303,6 +304,8 @@ public:
     {
         InitAppCompatSheet();
         m_launcher->ReadGFlags();
+
+        SHAutoComplete(GetDlgItem(IDC_EXECUTABLE), SHACF_FILESYS_ONLY);
 
         SetDlgItemText(IDC_EXECUTABLE, m_launcher->strExecutable);
         SetDlgItemText(IDC_PARAMS, m_launcher->strParams);
