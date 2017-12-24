@@ -121,12 +121,12 @@ public:
         delete[] buffer;
     }
     
-    virtual void log_message(char* buffer)
+    virtual void log_message(const char* buffer)
     {
         printf("%s", buffer);
     }
 
-    virtual void log_message(wchar_t* buffer)
+    virtual void log_message(const wchar_t* buffer)
     {
         printf("%ls", buffer);
     }
@@ -166,7 +166,7 @@ class DbgLogger :public LdrLogger
 private: 
     FILE * file;
     
-    void log_message(char* buffer)
+    void log_message(const char* buffer)
     {
         CaptureDbgOut::log_message(buffer);
         if (file)
@@ -176,7 +176,7 @@ private:
         }
     }
 
-    void log_message(wchar_t* buffer)
+    void log_message(const wchar_t* buffer)
     {
         CaptureDbgOut::log_message(buffer);
         if (file)
@@ -252,7 +252,7 @@ int wmain(int argc, WCHAR **argv)
         int ret = debugger.run(cmd, NULL);
         if (!ret)
         {
-            printf ("CreateProcessW failed, ret:%d, error:%d\n", ret, GetLastError());
+            printf ("CreateProcessW failed, ret:%d, error:%lx\n", ret, GetLastError());
             return 0;
         }
     }
