@@ -13,9 +13,6 @@
 #include <winbase.h>
 #include <winver.h>
 
-//#include <string>
-//#include <vector>
-//#include <map>
 #include <stdio.h>
 #include <assert.h>
 

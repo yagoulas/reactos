@@ -161,6 +161,10 @@ private:
     }
 };
 
+void PrintStackBacktrace(FILE* output, HANDLE ProcessHandle, HANDLE ThreadHandle, CONTEXT& Context);
+void BeginStackBacktrace(HANDLE ProcessHandle);
+void EndStackBacktrace(HANDLE ProcessHandle);
+
 class DbgLogger :public LdrLogger
 {
 private: 
@@ -184,6 +188,28 @@ private:
             fprintf(file, "%ls", buffer);
             fflush(file);
         }
+    }
+    
+    DWORD handle_event(DEBUG_EVENT& evt)
+    {
+        if (evt.dwDebugEventCode == EXCEPTION_DEBUG_EVENT)
+        {
+            if (evt.u.Exception.dwFirstChance)
+                log_message(L"Got first change exception:\n");
+            else
+                log_message(L"Got second change exception:\n");
+            
+            HANDLE hThread = OpenThread(THREAD_ALL_ACCESS, FALSE, evt.dwThreadId);
+            HANDLE hProcess = OpenThread(PROCESS_ALL_ACCESS, FALSE, evt.dwProcessId);
+            CONTEXT Context;
+            Context.ContextFlags = CONTEXT_INTEGER | CONTEXT_CONTROL | CONTEXT_DEBUG_REGISTERS;
+            GetThreadContext(hThread, &Context);
+            BeginStackBacktrace(hProcess);
+            PrintStackBacktrace(file, hProcess, hThread, Context);
+            EndStackBacktrace(hProcess);
+        }
+        
+        return BaseDebugger::handle_event(evt);
     }
 
 public:
