@@ -315,7 +315,7 @@ public:
 
     CShellBrowser();
     ~CShellBrowser();
-    HRESULT Initialize(LPITEMIDLIST pidl, DWORD dwFlags);
+    HRESULT Initialize();
 public:
     HRESULT BrowseToPIDL(LPCITEMIDLIST pidl, long flags);
     HRESULT BrowseToPath(IShellFolder *newShellFolder, LPCITEMIDLIST absolutePIDL,
@@ -587,7 +587,6 @@ public:
     virtual HRESULT STDMETHODCALLTYPE GetPositionCookie(DWORD *pdwPositioncookie);
 
     // message handlers
-    LRESULT OnCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled);
     LRESULT OnDestroy(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled);
     LRESULT OnSize(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled);
     LRESULT OnInitMenuPopup(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled);
@@ -631,7 +630,6 @@ public:
     }
 
     BEGIN_MSG_MAP(CShellBrowser)
-        MESSAGE_HANDLER(WM_CREATE, OnCreate)
         MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
         MESSAGE_HANDLER(WM_SIZE, OnSize)
         MESSAGE_HANDLER(WM_INITMENUPOPUP, OnInitMenuPopup)
@@ -716,7 +714,7 @@ CShellBrowser::~CShellBrowser()
         DSA_Destroy(menuDsa);
 }
 
-HRESULT CShellBrowser::Initialize(LPITEMIDLIST pidl, DWORD dwFlags)
+HRESULT CShellBrowser::Initialize()
 {
     CComPtr<IPersistStreamInit>             persistStreamInit;
     HRESULT                                 hResult;
@@ -732,6 +730,8 @@ HRESULT CShellBrowser::Initialize(LPITEMIDLIST pidl, DWORD dwFlags)
     if (ReadCabinetState(&fCabinetState, sizeof(fCabinetState)) == FALSE)
     {
     }
+
+    m_hAccel = LoadAcceleratorsW(GetModuleHandle(L"browseui.dll"), MAKEINTRESOURCEW(256));
 
     // create window
     Create(HWND_DESKTOP);
@@ -777,21 +777,11 @@ HRESULT CShellBrowser::Initialize(LPITEMIDLIST pidl, DWORD dwFlags)
 
     fToolbarProxy.Initialize(m_hWnd, clientBar);
 
-
     // create status bar
     fStatusBar = CreateWindow(STATUSCLASSNAMEW, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS |
                     SBT_NOBORDERS | SBT_TOOLTIPS, 0, 0, 500, 20, m_hWnd, (HMENU)0xa001,
                     _AtlBaseModule.GetModuleInstance(), 0);
     fStatusBarVisible = true;
-
-
-    // browse 
-    hResult = BrowseToPIDL(pidl, BTP_UPDATE_NEXT_HISTORY);
-    if (FAILED_UNEXPECTEDLY(hResult))
-        return hResult;
-
-    if ((dwFlags & SBSP_EXPLOREMODE) != NULL)
-        ShowBand(CLSID_ExplorerBand, true);
 
     ShowWindow(SW_SHOWNORMAL);
 
@@ -1007,6 +997,9 @@ HRESULT CShellBrowser::BrowseToPath(IShellFolder *newShellFolder,
     saveCurrentShellFolder.Release();
 
     hResult = newShellView->UIActivate(SVUIA_ACTIVATE_FOCUS);
+
+    if (!previousView)
+        RepositionBars();
 
     // leave updating section
     if (windowUpdateIsLocked)
@@ -2554,7 +2547,6 @@ HRESULT STDMETHODCALLTYPE CShellBrowser::OnSize(WPARAM wParam)
 
 HRESULT STDMETHODCALLTYPE CShellBrowser::OnCreate(struct tagCREATESTRUCTW *pcs)
 {
-    m_hAccel = LoadAcceleratorsW(GetModuleHandle(L"browseui.dll"), MAKEINTRESOURCEW(256));
     return S_OK;
 }
 
@@ -3357,12 +3349,6 @@ HRESULT STDMETHODCALLTYPE CShellBrowser::GetPositionCookie(DWORD *pdwPositioncoo
     return E_NOTIMPL;
 }
 
-LRESULT CShellBrowser::OnCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled)
-{
-    OnCreate(reinterpret_cast<LPCREATESTRUCT> (lParam));
-    return 0;
-}
-
 LRESULT CShellBrowser::OnDestroy(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled)
 {
     HRESULT hr;
@@ -3727,7 +3713,7 @@ LRESULT CShellBrowser::RelayCommands(UINT uMsg, WPARAM wParam, LPARAM lParam, BO
     return 0;
 }
 
-HRESULT CShellBrowser_CreateInstance(LPITEMIDLIST pidl, DWORD dwFlags, REFIID riid, void **ppv)
+HRESULT CShellBrowser_CreateInstance(REFIID riid, void **ppv)
 {
-    return ShellObjectCreatorInit<CShellBrowser>(pidl, dwFlags, riid, ppv);
+    return ShellObjectCreatorInit<CShellBrowser>(riid, ppv);
 }

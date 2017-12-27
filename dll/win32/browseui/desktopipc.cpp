@@ -349,8 +349,7 @@ static HRESULT ExplorerMessageLoop(IEThreadParamBlock * parameters)
     BOOL Ret;
 
     // Tell the thread ref we are using it.
-    if (parameters && parameters->offsetF8)
-        parameters->offsetF8->AddRef();
+    CComPtr<IUnknown> pThreadRef = parameters->offsetF8;
 
     /* Handle /e parameter */
      UINT wFlags = 0;
@@ -358,33 +357,37 @@ static HRESULT ExplorerMessageLoop(IEThreadParamBlock * parameters)
         wFlags |= SBSP_EXPLOREMODE;
 
     /* Handle /select parameter */
-    PUITEMID_CHILD pidlSelect = NULL;
+    CComHeapPtr<ITEMID_CHILD> pidlSelect;
     if ((parameters->dwFlags & SH_EXPLORER_CMDLINE_FLAG_SELECT) && 
         (ILGetNext(parameters->directoryPIDL) != NULL))
     {
-        pidlSelect = ILClone(ILFindLastID(parameters->directoryPIDL));
+        pidlSelect.Attach(ILClone(ILFindLastID(parameters->directoryPIDL)));
         ILRemoveLastID(parameters->directoryPIDL);
     }
 
-    hResult = CShellBrowser_CreateInstance(parameters->directoryPIDL, wFlags, IID_PPV_ARG(IBrowserService2, &browser));
+    hResult = CShellBrowser_CreateInstance(IID_PPV_ARG(IBrowserService2, &browser));
+    if (FAILED_UNEXPECTEDLY(hResult))
+        return hResult;
+
+    CComPtr<IShellBrowser> pisb;
+    hResult = browser->QueryInterface(IID_PPV_ARG(IShellBrowser, &pisb));
+    if (FAILED_UNEXPECTEDLY(hResult))
+        return hResult;
+
+    hResult = pisb->BrowseObject(parameters->directoryPIDL, wFlags);
     if (FAILED_UNEXPECTEDLY(hResult))
         return hResult;
 
     if (pidlSelect != NULL)
     {
-        CComPtr<IShellBrowser> pisb;
-        hResult = browser->QueryInterface(IID_PPV_ARG(IShellBrowser, &pisb));
+        CComPtr<IShellView> shellView;
+        hResult = pisb->QueryActiveShellView(&shellView);
         if (SUCCEEDED(hResult))
         {
-            CComPtr<IShellView> shellView;
-            hResult = pisb->QueryActiveShellView(&shellView);
-            if (SUCCEEDED(hResult))
-            {
-                shellView->SelectItem(pidlSelect, SVSI_SELECT|SVSI_ENSUREVISIBLE);
-            }
+            shellView->SelectItem(pidlSelect, SVSI_SELECT|SVSI_ENSUREVISIBLE);
         }
-        ILFree(pidlSelect);
     }
+    pisb = NULL;
 
     while ((Ret = GetMessage(&Msg, NULL, 0, 0)) != 0)
     {
@@ -412,11 +415,7 @@ static HRESULT ExplorerMessageLoop(IEThreadParamBlock * parameters)
 
     browser.Detach();
 
-    // Tell the thread ref we are not using it anymore.
-    if (parameters && parameters->offsetF8)
-        parameters->offsetF8->Release();
-
-    return hResult;
+    return S_OK;
 }
 
 static DWORD WINAPI BrowserThreadProc(LPVOID lpThreadParameter)
