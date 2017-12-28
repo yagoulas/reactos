@@ -252,7 +252,7 @@ struct MenuBandInfo {
 };
 
 class CShellBrowser :
-    public CWindowImpl<CShellBrowser, CWindow, CFrameWinTraits>,
+    public CWindow,
     public CComObjectRootEx<CComMultiThreadModelNoCS>,
     public IShellBrowser,
     public IDropTarget,
@@ -300,19 +300,6 @@ private:
     HDSA menuDsa;
     HACCEL m_hAccel;
 public:
-#if 0
-    ULONG InternalAddRef()
-    {
-        OutputDebugString(_T("AddRef\n"));
-        return CComObjectRootEx<CComMultiThreadModelNoCS>::InternalAddRef();
-    }
-    ULONG InternalRelease()
-    {
-        OutputDebugString(_T("Release\n"));
-        return CComObjectRootEx<CComMultiThreadModelNoCS>::InternalRelease();
-    }
-#endif
-
     CShellBrowser();
     ~CShellBrowser();
     HRESULT Initialize();
@@ -331,10 +318,6 @@ public:
     HRESULT BuildExplorerBandMenu();
     HRESULT BuildExplorerBandCategory(HMENU hBandsMenu, CATID category, DWORD dwPos, UINT *nbFound);
     BOOL IsBuiltinBand(CLSID &bandID);
-    virtual WNDPROC GetWindowProc()
-    {
-        return WindowProc;
-    }
     HRESULT FireEvent(DISPID dispIdMember, int argCount, VARIANT *arguments);
     HRESULT FireNavigateComplete(const wchar_t *newDirectory);
     HRESULT FireCommandStateChange(bool newState, int commandID);
@@ -617,19 +600,32 @@ public:
     LRESULT RelayCommands(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL &bHandled);
     HRESULT OnSearch();
 
-    static ATL::CWndClassInfo& GetWndClassInfo()
-    {
-        static ATL::CWndClassInfo wc =
-        {
-            { sizeof(WNDCLASSEX), CS_DBLCLKS, StartWindowProc,
-              0, 0, NULL, LoadIcon(_AtlBaseModule.GetResourceInstance(), MAKEINTRESOURCE(IDI_CABINET)),
-              LoadCursor(NULL, IDC_ARROW), (HBRUSH)(COLOR_WINDOW + 1), NULL, szCabinetWndClass, NULL },
-            NULL, NULL, IDC_ARROW, TRUE, 0, _T("")
-        };
-        return wc;
-    }
-
     BEGIN_MSG_MAP(CShellBrowser)
+
+        /* If the shell browser is initialized, let the menu band preprocess the messages */
+        if (fCurrentDirectoryPIDL)
+        {
+
+            MSG Msg;
+            LRESULT lRet;
+
+            Msg.hwnd = m_hWnd;
+            Msg.message = uMsg;
+            Msg.wParam = wParam;
+            Msg.lParam = lParam;
+
+            CComPtr<IMenuBand> menuBand;
+            HRESULT hResult = GetMenuBand(IID_PPV_ARG(IMenuBand, &menuBand));
+            if (SUCCEEDED(hResult) && menuBand.p != NULL)
+            {
+                hResult = menuBand->TranslateMenuMessage(&Msg, &lRet);
+                if (hResult == S_OK)
+                    return lRet;
+                uMsg = Msg.message;
+                wParam = Msg.wParam;
+                lParam = Msg.lParam;
+            }
+        }
         MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
         MESSAGE_HANDLER(WM_SIZE, OnSize)
         MESSAGE_HANDLER(WM_INITMENUPOPUP, OnInitMenuPopup)
@@ -693,8 +689,6 @@ public:
     END_COM_MAP()
 };
 
-extern HRESULT CreateProgressDialog(REFIID riid, void **ppv);
-
 CShellBrowser::CShellBrowser()
 {
     fCurrentShellViewWindow = NULL;
@@ -732,11 +726,6 @@ HRESULT CShellBrowser::Initialize()
     }
 
     m_hAccel = LoadAcceleratorsW(GetModuleHandle(L"browseui.dll"), MAKEINTRESOURCEW(256));
-
-    // create window
-    Create(HWND_DESKTOP);
-    if (m_hWnd == NULL)
-        return E_FAIL;
 
     hResult = CInternetToolbar_CreateInstance(IID_PPV_ARG(IUnknown, &clientBar));
     if (FAILED_UNEXPECTEDLY(hResult))
@@ -1351,62 +1340,6 @@ HRESULT CShellBrowser::DoFolderOptions()
     m_PropSheet.nStartPage = 0;
     PropertySheet(&m_PropSheet);
     return S_OK;
-}
-
-LRESULT CALLBACK CShellBrowser::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-    CShellBrowser                           *pThis = reinterpret_cast<CShellBrowser *>(hWnd);
-    _ATL_MSG                                msg(pThis->m_hWnd, uMsg, wParam, lParam);
-    LRESULT                                 lResult;
-    const _ATL_MSG                          *previousMessage;
-    BOOL                                    handled;
-    WNDPROC                                 saveWindowProc;
-    HRESULT                                 hResult;
-
-    hWnd = pThis->m_hWnd;
-    previousMessage = pThis->m_pCurrentMsg;
-    pThis->m_pCurrentMsg = &msg;
-
-    /* If the shell browser is initialized, let the menu band preprocess the messages */
-    if (pThis->fCurrentDirectoryPIDL)
-    {
-        CComPtr<IMenuBand> menuBand;
-        hResult = pThis->GetMenuBand(IID_PPV_ARG(IMenuBand, &menuBand));
-        if (SUCCEEDED(hResult) && menuBand.p != NULL)
-        {
-            hResult = menuBand->TranslateMenuMessage(&msg, &lResult);
-            if (hResult == S_OK)
-                return lResult;
-            uMsg = msg.message;
-            wParam = msg.wParam;
-            lParam = msg.lParam;
-        }
-        menuBand.Release();
-    }
-
-    handled = pThis->ProcessWindowMessage(hWnd, uMsg, wParam, lParam, lResult, 0);
-    ATLASSERT(pThis->m_pCurrentMsg == &msg);
-    if (handled == FALSE)
-    {
-        if (uMsg == WM_NCDESTROY)
-        {
-            saveWindowProc = reinterpret_cast<WNDPROC>(::GetWindowLongPtr(hWnd, GWL_WNDPROC));
-            lResult = pThis->DefWindowProc(uMsg, wParam, lParam);
-            if (saveWindowProc == reinterpret_cast<WNDPROC>(::GetWindowLongPtr(hWnd, GWL_WNDPROC)))
-                ::SetWindowLongPtr(hWnd, GWL_WNDPROC, (LONG_PTR)pThis->m_pfnSuperWindowProc);
-            pThis->m_dwState |= WINSTATE_DESTROYED;
-        }
-        else
-            lResult = pThis->DefWindowProc(uMsg, wParam, lParam);
-    }
-    pThis->m_pCurrentMsg = previousMessage;
-    if (previousMessage == NULL && (pThis->m_dwState & WINSTATE_DESTROYED) != 0)
-    {
-        pThis->m_dwState &= ~WINSTATE_DESTROYED;
-        pThis->m_hWnd = NULL;
-        pThis->OnFinalMessage(hWnd);
-    }
-    return lResult;
 }
 
 void CShellBrowser::RepositionBars()
@@ -3713,7 +3646,110 @@ LRESULT CShellBrowser::RelayCommands(UINT uMsg, WPARAM wParam, LPARAM lParam, BO
     return 0;
 }
 
+/* This is some terribly ugly glue */
+template <class T, class TBase = CWindow, class TWinTraits = CControlWinTraits>
+class CShellBrowserWrapper: 
+    public CWindowImpl<T, TBase, TWinTraits>,
+    public IUnknown
+{
+private:
+    volatile LONG m_RefCount;
+    CComObject<CShellBrowser> *m_pBrowser;
+public:
+
+    CShellBrowserWrapper():
+        m_RefCount(0),
+        m_pBrowser(NULL)
+    {
+    }
+
+    ~CShellBrowserWrapper()
+    {
+        if (m_pBrowser)
+            m_pBrowser->Release();
+    }
+
+    HRESULT Initialize()
+    {
+        Create(NULL);
+        if (!m_hWnd)
+            return E_FAIL;
+
+        HRESULT hResult = CComObject<CShellBrowser>::CreateInstance(&m_pBrowser);
+        if (FAILED(hResult))
+            return hResult;
+
+        m_pBrowser->AddRef(); /* CreateInstance returns object with 0 ref count */
+        m_pBrowser->m_hWnd = m_hWnd;
+
+        return m_pBrowser->Initialize();
+    }
+
+    virtual ULONG STDMETHODCALLTYPE AddRef()
+    {
+        return InterlockedIncrement(&m_RefCount);
+    }
+
+    virtual ULONG STDMETHODCALLTYPE Release()
+    {
+        ULONG Ret = InterlockedDecrement(&m_RefCount);
+
+        if (Ret == 0)
+            delete this;
+
+        return Ret;
+    }
+
+    virtual HRESULT STDMETHODCALLTYPE QueryInterface(IN REFIID riid, OUT LPVOID *ppvObj)
+    {
+        if (!m_pBrowser)
+        {
+            *ppvObj = NULL;
+            return E_NOINTERFACE;
+        }
+        return m_pBrowser->QueryInterface(riid, ppvObj);
+    }
+
+    BEGIN_MSG_MAP(CShellBrowserWrapper)
+        return m_pBrowser->ProcessWindowMessage(hWnd, uMsg, wParam, lParam, lResult);
+    END_MSG_MAP()
+
+    static HRESULT CreateBrowser(REFIID riid, void **ppv)
+    {
+        T* pBrowser = new T();
+        if (!pBrowser)
+            return E_FAIL;
+
+        pBrowser->AddRef();
+        HRESULT hres = pBrowser->Initialize();
+        if (FAILED(hres))
+        {
+            pBrowser->Release();
+            return hres;
+        }
+
+        return pBrowser->QueryInterface(riid, ppv);
+    }
+};
+
+class CShellBrowser2:
+    public CShellBrowserWrapper<CShellBrowser2, CWindow, CFrameWinTraits>
+{
+public:
+    static ATL::CWndClassInfo& GetWndClassInfo()
+    {
+        static ATL::CWndClassInfo wc =
+        {
+            { sizeof(WNDCLASSEX), CS_DBLCLKS, StartWindowProc,
+              0, 0, NULL, LoadIcon(_AtlBaseModule.GetResourceInstance(), MAKEINTRESOURCE(IDI_CABINET)),
+              LoadCursor(NULL, IDC_ARROW), (HBRUSH)(COLOR_WINDOW + 1), NULL, szCabinetWndClass, NULL },
+            NULL, NULL, IDC_ARROW, TRUE, 0, _T("")
+        };
+        return wc;
+    }
+};
+
 HRESULT CShellBrowser_CreateInstance(REFIID riid, void **ppv)
 {
-    return ShellObjectCreatorInit<CShellBrowser>(riid, ppv);
+    return CShellBrowser2::CreateBrowser(riid,ppv);
 }
