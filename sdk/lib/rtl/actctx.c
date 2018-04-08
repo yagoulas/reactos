@@ -2353,11 +2353,51 @@ static BOOL parse_file_elem(xmlbuf_t* xmlbuf, struct assembly* assembly, struct 
     return ret;
 }
 
+static BOOL parse_supportedos_elem(xmlbuf_t *xmlbuf, struct assembly *assembly, struct actctx_loader *acl)
+{
+    xmlstr_t attr_name, attr_value;
+    BOOL end = FALSE, error;
+
+    while (next_xml_attr(xmlbuf, &attr_name, &attr_value, &error, &end))
+    {
+        if (xmlstr_cmp(&attr_name, IdW))
+        {
+                    UNICODE_STRING str;
+                    COMPATIBILITY_CONTEXT_ELEMENT* compat;
+            GUID compat_id;
+            str.Buffer = (PWSTR)attr_value.ptr;
+            str.Length = str.MaximumLength = (USHORT)attr_value.len * sizeof(WCHAR);
+            if (RtlGUIDFromString(&str, &compat_id) == STATUS_SUCCESS)
+            {
+                if (!(compat = add_compat_context(assembly))) return FALSE;
+                compat->Type = ACTCX_COMPATIBILITY_ELEMENT_TYPE_OS;
+                compat->Id = compat_id;
+            }
+            else
+            {
+                        UNICODE_STRING attr_valueU = xmlstr2unicode(&attr_value);
+                        DPRINT1("Invalid guid %wZ\n", &attr_valueU);
+            }
+        }
+        else
+        {
+                    UNICODE_STRING attr_nameU = xmlstr2unicode(&attr_name);
+                    UNICODE_STRING attr_valueU = xmlstr2unicode(&attr_value);
+                    DPRINT1("unknown attr %wZ=%wZ\n", &attr_nameU, &attr_valueU);
+        }
+    }
+
+    if (error) return FALSE;
+    if (end) return TRUE;
+
+    return parse_expect_end_elem(xmlbuf, supportedOSW, asmv1W);
+}
+
 static BOOL parse_compatibility_application_elem(xmlbuf_t* xmlbuf, struct assembly* assembly,
                                                  struct actctx_loader* acl)
 {
-    xmlstr_t attr_name, attr_value, elem;
-    BOOL end = FALSE, ret = TRUE, error;
+    BOOL ret = TRUE;
+    xmlstr_t elem;
 
     while (ret && (ret = next_xml_elem(xmlbuf, &elem)))
     {
@@ -2368,34 +2408,7 @@ static BOOL parse_compatibility_application_elem(xmlbuf_t* xmlbuf, struct assemb
         }
         else if (xmlstr_cmp(&elem, supportedOSW))
         {
-            while (next_xml_attr(xmlbuf, &attr_name, &attr_value, &error, &end))
-            {
-                if (xmlstr_cmp(&attr_name, IdW))
-                {
-                    UNICODE_STRING str;
-                    COMPATIBILITY_CONTEXT_ELEMENT* compat;
-                    GUID compat_id;
-                    str.Buffer = (PWSTR)attr_value.ptr;
-                    str.Length = str.MaximumLength = (USHORT)attr_value.len * sizeof(WCHAR);
-                    if (RtlGUIDFromString(&str, &compat_id) == STATUS_SUCCESS)
-                    {
-                        if (!(compat = add_compat_context(assembly))) return FALSE;
-                        compat->Type = ACTCX_COMPATIBILITY_ELEMENT_TYPE_OS;
-                        compat->Id = compat_id;
-                    }
-                    else
-                    {
-                        UNICODE_STRING attr_valueU = xmlstr2unicode(&attr_value);
-                        DPRINT1("Invalid guid %wZ\n", &attr_valueU);
-                    }
-                }
-                else
-                {
-                    UNICODE_STRING attr_nameU = xmlstr2unicode(&attr_name);
-                    UNICODE_STRING attr_valueU = xmlstr2unicode(&attr_value);
-                    DPRINT1("unknown attr %wZ=%wZ\n", &attr_nameU, &attr_valueU);
-                }
-            }
+            ret = parse_supportedos_elem(xmlbuf, assembly, acl);
         }
         else
         {
