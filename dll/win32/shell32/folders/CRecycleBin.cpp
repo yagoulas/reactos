@@ -61,20 +61,6 @@ static const columninfo RecycleBinColumns[] =
 /*
  * Recycle Bin folder
  */
-
-HRESULT CRecyclerExtractIcon_CreateInstance(LPCITEMIDLIST pidl, REFIID riid, LPVOID * ppvOut)
-{
-    CComPtr<IDefaultExtractIconInit> initIcon;
-    HRESULT hr = SHCreateDefaultExtractIcon(IID_PPV_ARG(IDefaultExtractIconInit, &initIcon));
-    if (FAILED_UNEXPECTEDLY(hr))
-        return hr;
-
-    /* FIXME: This is completely unimplemented */
-    initIcon->SetNormalIcon(swShell32Name, 0);
-
-    return initIcon->QueryInterface(riid, ppvOut);
-}
-
 class CRecycleBinEnum :
     public CEnumIDListBase
 {
@@ -586,7 +572,9 @@ HRESULT WINAPI CRecycleBin::GetUIObjectOf(HWND hwndOwner, UINT cidl, PCUITEMID_C
     }
     else if((IsEqualIID(riid, IID_IExtractIconA) || IsEqualIID(riid, IID_IExtractIconW)) && (cidl == 1))
     {
-        hr = CRecyclerExtractIcon_CreateInstance(apidl[0], riid, &pObj);
+        PIDLRecycleStruct* pData = _ILGetRecycleStruct(apidl[0]);
+        if (pData)
+            hr = SHCreateFileExtractIconW(pFileDetails->szName, 0, riid, &pObj);
     }
     else
         hr = E_NOINTERFACE;
