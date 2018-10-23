@@ -542,6 +542,45 @@ GetInterfaceOffset(
     return offset;
 }
 
+VOID
+TestObjectInterfaces(PUNKNOWN pUnk, PCCLASS_AND_INTERFACES class)
+{
+    INT iIntf;
+
+    /* Check that all expected interfaces are present and have the right offset */
+    for (iIntf = 0; class->ifaces[iIntf].iid; iIntf++)
+    {
+        PCKNOWN_INTERFACE iface = FindInterface(class->ifaces[iIntf].iid);
+        LONG offset = GetInterfaceOffset(pUnk, iface->iid);
+        if (offset == INTF_NOT_EXPOSED)
+            ok(0, "%s is missing %s (offset %ld)\n", class->name, iface->name, class->ifaces[iIntf].offset);
+        else if (class->ifaces[iIntf].offset != FARAWY)
+        {
+#ifdef FAIL_WRONG_OFFSET
+            ok(offset == class->ifaces[iIntf].offset, "%s, %s offset is %ld, expected %ld\n", class->name, iface->name, offset, class->ifaces[iIntf].offset);
+#else
+            if (offset != class->ifaces[iIntf].offset)
+                mytrace("%s, %s offset is %ld, expected %ld\n", class->name, iface->name, offset, class->ifaces[iIntf].offset);
+#endif
+        }
+    }
+
+    /* Check that none other than the expected interfaces are present */
+    for (iIntf = 0; iIntf < KnownInterfaceCount; iIntf++)
+    {
+        PCKNOWN_INTERFACE iface = &KnownInterfaces[iIntf];
+        LONG offset;
+        if (IsInterfaceExpected(class, iface->iid))
+            continue;
+        offset = GetInterfaceOffset(pUnk, iface->iid);
+#ifdef GENERATE_TABLE_ENTRIES
+        ok(offset == INTF_NOT_EXPOSED, "%s: { %s0x%lx,   &%s },\n", class->name, offset < 0 ? "-" : "", offset < 0 ? -offset : offset, iface->name);
+#else
+        ok(offset == INTF_NOT_EXPOSED, "%s exposes %s (offset %ld), but shouldn't\n", class->name, iface->name, offset);
+#endif
+    }
+}
+
 static
 VOID
 TestModuleInterfaces(
@@ -550,8 +589,7 @@ TestModuleInterfaces(
 {
     HRESULT hr;
     PVOID pObj;
-    PUNKNOWN pUnk;
-    INT iClass, iIntf;
+    INT iClass;
     PCCLASS_AND_INTERFACES class;
 
     for (iClass = 0; iClass < ExpectedInterfaceCount; iClass++)
@@ -569,44 +607,11 @@ TestModuleInterfaces(
             continue;
         }
 
-        pUnk = pObj;
-
-        /* Check that all expected interfaces are present and have the right offset */
-        for (iIntf = 0; class->ifaces[iIntf].iid; iIntf++)
-        {
-            PCKNOWN_INTERFACE iface = FindInterface(class->ifaces[iIntf].iid);
-            LONG offset = GetInterfaceOffset(pUnk, iface->iid);
-            if (offset == INTF_NOT_EXPOSED)
-                ok(0, "%s is missing %s (offset %ld)\n", class->name, iface->name, class->ifaces[iIntf].offset);
-            else if (class->ifaces[iIntf].offset != FARAWY)
-            {
-#ifdef FAIL_WRONG_OFFSET
-                ok(offset == class->ifaces[iIntf].offset, "%s, %s offset is %ld, expected %ld\n", class->name, iface->name, offset, class->ifaces[iIntf].offset);
-#else
-                if (offset != class->ifaces[iIntf].offset)
-                    mytrace("%s, %s offset is %ld, expected %ld\n", class->name, iface->name, offset, class->ifaces[iIntf].offset);
-#endif
-            }
-        }
-
-        /* Check that none other than the expected interfaces are present */
-        for (iIntf = 0; iIntf < KnownInterfaceCount; iIntf++)
-        {
-            PCKNOWN_INTERFACE iface = &KnownInterfaces[iIntf];
-            LONG offset;
-            if (IsInterfaceExpected(class, iface->iid))
-                continue;
-            offset = GetInterfaceOffset(pUnk, iface->iid);
-#ifdef GENERATE_TABLE_ENTRIES
-            ok(offset == INTF_NOT_EXPOSED, "%s: { %s0x%lx,   &%s },\n", class->name, offset < 0 ? "-" : "", offset < 0 ? -offset : offset, iface->name);
-#else
-            ok(offset == INTF_NOT_EXPOSED, "%s exposes %s (offset %ld), but shouldn't\n", class->name, iface->name, offset);
-#endif
-        }
+        TestObjectInterfaces((PUNKNOWN)pObj, class);
 
         // TODO: do some aggregation
 
-        IUnknown_Release(pUnk);
+        IUnknown_Release((PUNKNOWN)pObj);
     }
 }
 

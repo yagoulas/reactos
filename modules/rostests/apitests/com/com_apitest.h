@@ -60,6 +60,9 @@ typedef const CLASS_AND_INTERFACES *PCCLASS_AND_INTERFACES;
 #define ID_NAME(c) &c, #c
 
 VOID
+TestObjectInterfaces(PUNKNOWN pUnk, PCCLASS_AND_INTERFACES class);
+
+VOID
 TestClasses(
     _In_ PCWSTR ModuleName,
     _In_ PCCLASS_AND_INTERFACES ExpectedInterfaces,

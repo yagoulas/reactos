@@ -6,6 +6,8 @@
  */
 
 #include "com_apitest.h"
+#include <wincon.h>
+#include <shlobj.h>
 
 #define NDEBUG
 #include <debug.h>
@@ -624,7 +626,99 @@ static const CLASS_AND_INTERFACES ExpectedInterfaces[] =
 };
 static const INT ExpectedInterfaceCount = RTL_NUMBER_OF(ExpectedInterfaces);
 
+static const CLASS_AND_INTERFACES NotExportedInterfaces[] =
+{
+    {
+        NULL, "CDefView",
+        {
+            {    0x0,   &IID_IShellView2 },
+            {    0x0,       &IID_IShellView },
+            {    0x0,           &IID_IUnknown },
+            {    0x4,   &IID_IFolderView },
+            {    0x8,   &IID_IShellFolderView },
+            {    0xc,   &IID_IOleCommandTarget },
+            {   0x10,   &IID_IDropTarget },
+            {   0x14,   &IID_IViewObject },
+            {   0x18,   &IID_IDefViewFrame },
+            {   0x1C,   &IID_IDefViewFrame3 },
+            {   0x20,   &IID_IServiceProvider },
+            {   0x24,   &IID_IDocViewSite },
+            {   0x2C,   &IID_IPersistIDList },
+            {   0x30,   &IID_IDVGetEnum },
+            {   0x34,   &IID_IObjectWithSite },
+            {   0x44,   &IID_IContextMenuSite },
+            {   0x48,   &IID_IDefViewSafety },
+            {   0x50,   &IID_IDefViewFrameGroup },
+        }
+    },
+    {
+        NULL, "CDefFolderMenu",
+        {
+            {   -0x8,   &IID_IObjectWithSite },
+            {    0x0,   &IID_IContextMenu3 },
+            {    0x0,       &IID_IContextMenu2 },
+            {    0x0,           &IID_IContextMenu },
+            {    0x0,               &IID_IUnknown },
+            {    0x4,   &IID_IServiceProvider },
+            {    0xC,   &IID_IShellExtInit },
+        }
+    },
+};
+
+HRESULT CreateCDefView(IShellView **ppsv)
+{
+    IShellFolder *psfDesktop;
+    SFV_CREATE svcreate;
+    HRESULT hr;
+
+    hr = SHGetDesktopFolder(&psfDesktop);
+    ok(hr == S_OK, "\n");
+    if (FAILED(hr))
+        return hr;
+    svcreate.cbSize = sizeof(svcreate);
+    svcreate.pshf = psfDesktop;
+    svcreate.psvOuter = NULL;
+    svcreate.psfvcb = NULL;
+    hr = SHCreateShellFolderView(&svcreate, ppsv);
+    ok(hr == S_OK, "hr = %lx\n");
+
+    IUnknown_Release(psfDesktop);
+
+    return hr;
+}
+
+void TestNonExportedClasses()
+{
+    IShellFolder *psfDesktop;
+    SFV_CREATE svcreate;
+    HRESULT hr;
+    IShellView *psv;
+    IContextMenu *pcm;
+
+    hr = SHGetDesktopFolder(&psfDesktop);
+    ok(hr == S_OK, "hr = %lx\n");
+
+    svcreate.cbSize = sizeof(svcreate);
+    svcreate.pshf = psfDesktop;
+    svcreate.psvOuter = NULL;
+    svcreate.psfvcb = NULL;
+    
+    hr = SHCreateShellFolderView(&svcreate, &psv);
+    ok(hr == S_OK, "hr = %lx\n");
+
+    hr = CDefFolderMenu_Create2(NULL, NULL, 0, NULL, psfDesktop, NULL, 0, NULL, &pcm);
+    ok(hr == S_OK, "hr = %lx\n");
+
+    TestObjectInterfaces((PUNKNOWN)psv, &NotExportedInterfaces[0]);
+    TestObjectInterfaces((PUNKNOWN)pcm, &NotExportedInterfaces[1]);
+
+}
+
 START_TEST(shell32)
 {
     TestClasses(L"shell32", ExpectedInterfaces, ExpectedInterfaceCount);
+
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    TestNonExportedClasses();
+    CoUninitialize();
 }
