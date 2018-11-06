@@ -1871,12 +1871,12 @@ BOOL DigitFilter(WCHAR ch)
 }
 
 static int
-ShowPartitionSizeInputBox(SHORT Left,
-                          SHORT Top,
-                          SHORT Right,
-                          SHORT Bottom,
-                          ULONG MaxSize,
-                          PWSTR InputBuffer)
+HandlePartitionSizeInputBox(SHORT Left,
+                            SHORT Top,
+                            SHORT Right,
+                            SHORT Bottom,
+                            ULONG MaxSize,
+                            ULONGLONG *pPartSize)
 {
     INPUT_RECORD Ir;
     COORD coPos;
@@ -1884,6 +1884,8 @@ ShowPartitionSizeInputBox(SHORT Left,
     CHAR Buffer[128];
     SHORT iLeft;
     SHORT iTop;
+    WCHAR InputBuffer[50];
+    int ret;
 
     DrawBox(Left, Top, Right - Left + 1, Bottom - Top + 1);
 
@@ -1909,15 +1911,28 @@ ShowPartitionSizeInputBox(SHORT Left,
                                  coPos,
                                  &Written);
 
-    swprintf(InputBuffer, L"%lu", MaxSize);
+    while(TRUE)
+    {
 
-    return SetupHandleEditField(&Ir, 
-                                iLeft, 
-                                iTop, 
-                                PARTITION_SIZE_INPUT_FIELD_LENGTH, 
-                                InputBuffer, 
-                                TRUE, 
-                                DigitFilter);
+        swprintf(InputBuffer, L"%lu", MaxSize);
+
+        ret = SetupHandleEditField(&Ir, 
+                                   iLeft, 
+                                   iTop, 
+                                   PARTITION_SIZE_INPUT_FIELD_LENGTH, 
+                                   InputBuffer, 
+                                   TRUE, 
+                                   DigitFilter);
+        if (ret != SETUP_OK)
+            break;
+
+        *pPartSize = _wcstoui64(InputBuffer, NULL, 10);
+
+        if (*pPartSize > 0 && *pPartSize <= MaxSize)
+            break;
+    }
+
+    return ret;
 }
 
 
@@ -1937,7 +1952,6 @@ CreatePrimaryPartitionPage(PINPUT_RECORD Ir)
 {
     PDISKENTRY DiskEntry;
     PPARTENTRY PartEntry;
-    WCHAR InputBuffer[50];
     ULONG MaxSize;
     ULONGLONG PartSize;
     ULONGLONG DiskSize;
@@ -2013,62 +2027,41 @@ CreatePrimaryPartitionPage(PINPUT_RECORD Ir)
     CONSOLE_SetStatusText(MUIGetString(STRING_CREATEPARTITION));
 
     PartEntry = PartitionList->CurrentPartition;
-    while (TRUE)
+    MaxSize = (PartEntry->SectorCount.QuadPart * DiskEntry->BytesPerSector) / MB;  /* in MBytes (rounded) */
+
+    if (MaxSize > PARTITION_MAXSIZE)
+        MaxSize = PARTITION_MAXSIZE;
+    
+    res = HandlePartitionSizeInputBox(12, 14, xScreen - 12, 17, /* left, top, right, bottom */
+                                      MaxSize, &PartSize);
+    if (res == SETUP_QUIT)
+        return QUIT_PAGE;
+    else if (res == SETUP_QUIT_CANCELED)
+        return CREATE_PRIMARY_PARTITION_PAGE;
+
+    /* Convert to bytes */
+    if (PartSize == MaxSize)
     {
-        MaxSize = (PartEntry->SectorCount.QuadPart * DiskEntry->BytesPerSector) / MB;  /* in MBytes (rounded) */
+        /* Use all of the unpartitioned disk space */
+        SectorCount = PartEntry->SectorCount.QuadPart;
+    }
+    else
+    {
+        /* Calculate the sector count from the size in MB */
+        SectorCount = PartSize * MB / DiskEntry->BytesPerSector;
 
-        if (MaxSize > PARTITION_MAXSIZE)
-            MaxSize = PARTITION_MAXSIZE;
-
-        res = ShowPartitionSizeInputBox(12, 14, xScreen - 12, 17, /* left, top, right, bottom */
-                                        MaxSize, InputBuffer);
-        if (res == SETUP_QUIT)
-            return QUIT_PAGE;
-        else if (res == SETUP_QUIT_CANCELED)
-            break;
-        else
-        {
-            PartSize = _wcstoui64(InputBuffer, NULL, 10);
-
-            if (PartSize < 1)
-            {
-                /* Too small */
-                continue;
-            }
-
-            if (PartSize > MaxSize)
-            {
-                /* Too large */
-                continue;
-            }
-
-            /* Convert to bytes */
-            if (PartSize == MaxSize)
-            {
-                /* Use all of the unpartitioned disk space */
-                SectorCount = PartEntry->SectorCount.QuadPart;
-            }
-            else
-            {
-                /* Calculate the sector count from the size in MB */
-                SectorCount = PartSize * MB / DiskEntry->BytesPerSector;
-
-                /* But never get larger than the unpartitioned disk space */
-                if (SectorCount > PartEntry->SectorCount.QuadPart)
-                    SectorCount = PartEntry->SectorCount.QuadPart;
-            }
-
-            DPRINT ("Partition size: %I64u bytes\n", PartSize);
-
-            CreatePrimaryPartition(PartitionList,
-                                   SectorCount,
-                                   FALSE);
-
-            return SELECT_PARTITION_PAGE;
-        }
+        /* But never get larger than the unpartitioned disk space */
+        if (SectorCount > PartEntry->SectorCount.QuadPart)
+            SectorCount = PartEntry->SectorCount.QuadPart;
     }
 
-    return CREATE_PRIMARY_PARTITION_PAGE;
+    DPRINT ("Partition size: %I64u bytes\n", PartSize);
+
+    CreatePrimaryPartition(PartitionList,
+                           SectorCount,
+                           FALSE);
+
+    return SELECT_PARTITION_PAGE;
 }
 
 
@@ -2087,7 +2080,6 @@ CreateExtendedPartitionPage(PINPUT_RECORD Ir)
 {
     PDISKENTRY DiskEntry;
     PPARTENTRY PartEntry;
-    WCHAR InputBuffer[50];
     ULONG MaxSize;
     ULONGLONG PartSize;
     ULONGLONG DiskSize;
@@ -2163,61 +2155,40 @@ CreateExtendedPartitionPage(PINPUT_RECORD Ir)
     CONSOLE_SetStatusText(MUIGetString(STRING_CREATEPARTITION));
 
     PartEntry = PartitionList->CurrentPartition;
-    while (TRUE)
+    MaxSize = (PartEntry->SectorCount.QuadPart * DiskEntry->BytesPerSector) / MB;  /* in MBytes (rounded) */
+
+    if (MaxSize > PARTITION_MAXSIZE)
+        MaxSize = PARTITION_MAXSIZE;
+    
+    res = HandlePartitionSizeInputBox(12, 14, xScreen - 12, 17, /* left, top, right, bottom */
+                                      MaxSize, &PartSize);
+    if (res == SETUP_QUIT)
+        return QUIT_PAGE;
+    else if (res == SETUP_QUIT_CANCELED)
+        return CREATE_EXTENDED_PARTITION_PAGE;
+
+    /* Convert to bytes */
+    if (PartSize == MaxSize)
     {
-        MaxSize = (PartEntry->SectorCount.QuadPart * DiskEntry->BytesPerSector) / MB;  /* in MBytes (rounded) */
+        /* Use all of the unpartitioned disk space */
+        SectorCount = PartEntry->SectorCount.QuadPart;
+    }
+    else
+    {
+        /* Calculate the sector count from the size in MB */
+        SectorCount = PartSize * MB / DiskEntry->BytesPerSector;
 
-        if (MaxSize > PARTITION_MAXSIZE)
-            MaxSize = PARTITION_MAXSIZE;
-
-        res = ShowPartitionSizeInputBox(12, 14, xScreen - 12, 17, /* left, top, right, bottom */
-                                        MaxSize, InputBuffer);
-        if (res == SETUP_QUIT)
-            return QUIT_PAGE;
-        else if (res == SETUP_QUIT_CANCELED)
-            break;
-        else
-        {
-            PartSize = _wcstoui64(InputBuffer, NULL, 10);
-
-            if (PartSize < 1)
-            {
-                /* Too small */
-                continue;
-            }
-
-            if (PartSize > MaxSize)
-            {
-                /* Too large */
-                continue;
-            }
-
-            /* Convert to bytes */
-            if (PartSize == MaxSize)
-            {
-                /* Use all of the unpartitioned disk space */
-                SectorCount = PartEntry->SectorCount.QuadPart;
-            }
-            else
-            {
-                /* Calculate the sector count from the size in MB */
-                SectorCount = PartSize * MB / DiskEntry->BytesPerSector;
-
-                /* But never get larger than the unpartitioned disk space */
-                if (SectorCount > PartEntry->SectorCount.QuadPart)
-                    SectorCount = PartEntry->SectorCount.QuadPart;
-            }
-
-            DPRINT ("Partition size: %I64u bytes\n", PartSize);
-
-            CreateExtendedPartition(PartitionList,
-                                    SectorCount);
-
-            return SELECT_PARTITION_PAGE;
-        }
+        /* But never get larger than the unpartitioned disk space */
+        if (SectorCount > PartEntry->SectorCount.QuadPart)
+            SectorCount = PartEntry->SectorCount.QuadPart;
     }
 
-    return CREATE_EXTENDED_PARTITION_PAGE;
+    DPRINT ("Partition size: %I64u bytes\n", PartSize);
+
+    CreateExtendedPartition(PartitionList,
+                            SectorCount);
+
+    return SELECT_PARTITION_PAGE;
 }
 
 
@@ -2236,7 +2207,6 @@ CreateLogicalPartitionPage(PINPUT_RECORD Ir)
 {
     PDISKENTRY DiskEntry;
     PPARTENTRY PartEntry;
-    WCHAR InputBuffer[50];
     ULONG MaxSize;
     ULONGLONG PartSize;
     ULONGLONG DiskSize;
@@ -2312,62 +2282,40 @@ CreateLogicalPartitionPage(PINPUT_RECORD Ir)
     CONSOLE_SetStatusText(MUIGetString(STRING_CREATEPARTITION));
 
     PartEntry = PartitionList->CurrentPartition;
-    while (TRUE)
+    MaxSize = (PartEntry->SectorCount.QuadPart * DiskEntry->BytesPerSector) / MB;  /* in MBytes (rounded) */
+    if (MaxSize > PARTITION_MAXSIZE)
+        MaxSize = PARTITION_MAXSIZE;
+
+    res = HandlePartitionSizeInputBox(12, 14, xScreen - 12, 17, /* left, top, right, bottom */
+                                      MaxSize, &PartSize);
+    if (res == SETUP_QUIT)
+        return QUIT_PAGE;
+    else if (res == SETUP_QUIT_CANCELED)
+        return CREATE_LOGICAL_PARTITION_PAGE;
+
+    /* Convert to bytes */
+    if (PartSize == MaxSize)
     {
-        MaxSize = (PartEntry->SectorCount.QuadPart * DiskEntry->BytesPerSector) / MB;  /* in MBytes (rounded) */
+        /* Use all of the unpartitioned disk space */
+        SectorCount = PartEntry->SectorCount.QuadPart;
+    }
+    else
+    {
+        /* Calculate the sector count from the size in MB */
+        SectorCount = PartSize * MB / DiskEntry->BytesPerSector;
 
-        if (MaxSize > PARTITION_MAXSIZE)
-            MaxSize = PARTITION_MAXSIZE;
-
-        res = ShowPartitionSizeInputBox(12, 14, xScreen - 12, 17, /* left, top, right, bottom */
-                                        MaxSize, InputBuffer);
-        if (res == SETUP_QUIT)
-            return QUIT_PAGE;
-        else if (res == SETUP_QUIT_CANCELED)
-            break;
-        else
-        {
-            PartSize = _wcstoui64(InputBuffer, NULL, 10);
-
-            if (PartSize < 1)
-            {
-                /* Too small */
-                continue;
-            }
-
-            if (PartSize > MaxSize)
-            {
-                /* Too large */
-                continue;
-            }
-
-            /* Convert to bytes */
-            if (PartSize == MaxSize)
-            {
-                /* Use all of the unpartitioned disk space */
-                SectorCount = PartEntry->SectorCount.QuadPart;
-            }
-            else
-            {
-                /* Calculate the sector count from the size in MB */
-                SectorCount = PartSize * MB / DiskEntry->BytesPerSector;
-
-                /* But never get larger than the unpartitioned disk space */
-                if (SectorCount > PartEntry->SectorCount.QuadPart)
-                    SectorCount = PartEntry->SectorCount.QuadPart;
-            }
-
-            DPRINT("Partition size: %I64u bytes\n", PartSize);
-
-            CreateLogicalPartition(PartitionList,
-                                   SectorCount,
-                                   FALSE);
-
-            return SELECT_PARTITION_PAGE;
-        }
+        /* But never get larger than the unpartitioned disk space */
+        if (SectorCount > PartEntry->SectorCount.QuadPart)
+            SectorCount = PartEntry->SectorCount.QuadPart;
     }
 
-    return CREATE_LOGICAL_PARTITION_PAGE;
+    DPRINT("Partition size: %I64u bytes\n", PartSize);
+
+    CreateLogicalPartition(PartitionList,
+                           SectorCount,
+                           FALSE);
+
+    return SELECT_PARTITION_PAGE;
 }
 
 
