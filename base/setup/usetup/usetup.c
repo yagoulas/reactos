@@ -607,6 +607,85 @@ static int SetupHandleEditField(PINPUT_RECORD Ir, SHORT x, SHORT y, SHORT len, W
     return SETUP_OK;
 }
 
+/*
+ * Handles generic selection lists.
+ *
+ * PARAMS
+ * GenericList: The list to handle.
+ * Ir: The PINPUT_RECORD
+ * pchValidChars: Strings with the valid chars with a special function
+ */
+static PAGE_NUMBER
+HandleGenericList(PGENERIC_LIST_UI ListUi,
+                  PINPUT_RECORD Ir,
+                  CHAR* pchValidChars)
+{
+    while (TRUE)
+    {
+        CONSOLE_ConInKey(Ir);
+
+        if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
+            (Ir->Event.KeyEvent.wVirtualKeyCode == VK_DOWN))  /* DOWN */
+        {
+            ScrollDownGenericList(ListUi);
+        }
+        else if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
+                 (Ir->Event.KeyEvent.wVirtualKeyCode == VK_UP))  /* UP */
+        {
+            ScrollUpGenericList(ListUi);
+        }
+        else if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
+                 (Ir->Event.KeyEvent.wVirtualKeyCode == VK_NEXT))  /* PAGE DOWN */
+        {
+            ScrollPageDownGenericList(ListUi);
+        }
+        else if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
+                 (Ir->Event.KeyEvent.wVirtualKeyCode == VK_PRIOR))  /* PAGE UP */
+        {
+            ScrollPageUpGenericList(ListUi);
+        }
+        else if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
+                 (Ir->Event.KeyEvent.wVirtualKeyCode == VK_F3))  /* F3 */
+        {
+            if (ConfirmQuit(Ir))
+                return SETUP_QUIT;
+            else
+                RedrawGenericList(ListUi);
+        }
+        else if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
+                 (Ir->Event.KeyEvent.wVirtualKeyCode == VK_ESCAPE))  /* ESC */
+        {
+            RestoreGenericListUiState(ListUi);
+            return SETUP_CANCEL;
+        }
+        else if (Ir->Event.KeyEvent.uChar.AsciiChar == 0x0D) /* ENTER */
+        {
+            break;
+        }
+        else if ((Ir->Event.KeyEvent.uChar.AsciiChar > 0x60) && (Ir->Event.KeyEvent.uChar.AsciiChar < 0x7b))
+        {
+            if (pchValidChars)
+            {
+                CHAR input = toupper(Ir->Event.KeyEvent.uChar.AsciiChar);
+                CHAR* pchValidChar = pchValidChars;
+
+                while (*pchValidChar)
+                {
+                    if (input == *pchValidChar)
+                        return input;
+
+                    pchValidChar++;
+                }
+            }
+
+            /* a-z */
+            GenericListKeyPress(ListUi, Ir->Event.KeyEvent.uChar.AsciiChar);
+        }
+    }
+
+    return SETUP_OK;
+}
+
 static VOID
 UpdateKBLayout(VOID)
 {
@@ -1049,6 +1128,7 @@ static PAGE_NUMBER
 UpgradeRepairPage(PINPUT_RECORD Ir)
 {
     GENERIC_LIST_UI ListUi;
+    int selection;
 
 /*** HACK!! ***/
     if (PartitionList == NULL)
@@ -1096,52 +1176,17 @@ UpgradeRepairPage(PINPUT_RECORD Ir)
                     xScreen - 3,
                     yScreen - 3);
 
-    // return HandleGenericList(&ListUi, DEVICE_SETTINGS_PAGE, Ir);
-    while (TRUE)
+    selection = HandleGenericList(&ListUi, Ir, "u");
+    switch(selection)
     {
-        CONSOLE_ConInKey(Ir);
-
-        if (Ir->Event.KeyEvent.uChar.AsciiChar == 0x00)
-        {
-            switch (Ir->Event.KeyEvent.wVirtualKeyCode)
-            {
-            case VK_DOWN:   /* DOWN */
-                ScrollDownGenericList(&ListUi);
-                break;
-            case VK_UP:     /* UP */
-                ScrollUpGenericList(&ListUi);
-                break;
-            case VK_NEXT:   /* PAGE DOWN */
-                ScrollPageDownGenericList(&ListUi);
-                break;
-            case VK_PRIOR:  /* PAGE UP */
-                ScrollPageUpGenericList(&ListUi);
-                break;
-            case VK_F3:     /* F3 */
-            {
-                if (ConfirmQuit(Ir))
-                    return QUIT_PAGE;
-                else
-                    RedrawGenericList(&ListUi);
-                break;
-            }
-            case VK_ESCAPE: /* ESC */
-            {
-                RestoreGenericListUiState(&ListUi);
-                // return nextPage;    // prevPage;
-
-                // return INSTALL_INTRO_PAGE;
-                return DEVICE_SETTINGS_PAGE;
-                // return SCSI_CONTROLLER_PAGE;
-            }
-            }
-        }
-        else
-        {
-            // switch (toupper(Ir->Event.KeyEvent.uChar.AsciiChar))
-            // if (Ir->Event.KeyEvent.uChar.AsciiChar == 0x0D) /* ENTER */
-            if (toupper(Ir->Event.KeyEvent.uChar.AsciiChar) == 'U')  /* U */
-            {
+        case SETUP_QUIT:
+            return QUIT_PAGE;
+        case SETUP_OK:
+        case SETUP_CANCEL:
+            // return INSTALL_INTRO_PAGE;
+            return DEVICE_SETTINGS_PAGE;
+            // return SCSI_CONTROLLER_PAGE;
+        case 'u':
                 /* Retrieve the current installation */
                 ASSERT(GetNumberOfListEntries(NtOsInstallsList) >= 1);
 
@@ -1155,16 +1200,10 @@ UpgradeRepairPage(PINPUT_RECORD Ir)
 
                 // return nextPage;
                 /***/return INSTALL_INTRO_PAGE;/***/
-            }
-            else if ((Ir->Event.KeyEvent.uChar.AsciiChar > 0x60) &&
-                     (Ir->Event.KeyEvent.uChar.AsciiChar < 0x7b))   /* a-z */
-            {
-                GenericListKeyPress(&ListUi, Ir->Event.KeyEvent.uChar.AsciiChar);
-            }
-        }
     }
 
-    return UPGRADE_REPAIR_PAGE;
+    ASSERT(FALSE);
+    return DEVICE_SETTINGS_PAGE;
 }
 
 
@@ -1381,70 +1420,6 @@ DeviceSettingsPage(PINPUT_RECORD Ir)
 
 
 /*
- * Handles generic selection lists.
- *
- * PARAMS
- * GenericList: The list to handle.
- * nextPage: The page it needs to jump to after this page.
- * Ir: The PINPUT_RECORD
- */
-static PAGE_NUMBER
-HandleGenericList(PGENERIC_LIST_UI ListUi,
-                  PAGE_NUMBER nextPage,
-                  PINPUT_RECORD Ir)
-{
-    while (TRUE)
-    {
-        CONSOLE_ConInKey(Ir);
-
-        if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
-            (Ir->Event.KeyEvent.wVirtualKeyCode == VK_DOWN))  /* DOWN */
-        {
-            ScrollDownGenericList(ListUi);
-        }
-        else if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
-                 (Ir->Event.KeyEvent.wVirtualKeyCode == VK_UP))  /* UP */
-        {
-            ScrollUpGenericList(ListUi);
-        }
-        else if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
-                 (Ir->Event.KeyEvent.wVirtualKeyCode == VK_NEXT))  /* PAGE DOWN */
-        {
-            ScrollPageDownGenericList(ListUi);
-        }
-        else if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
-                 (Ir->Event.KeyEvent.wVirtualKeyCode == VK_PRIOR))  /* PAGE UP */
-        {
-            ScrollPageUpGenericList(ListUi);
-        }
-        else if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
-                 (Ir->Event.KeyEvent.wVirtualKeyCode == VK_F3))  /* F3 */
-        {
-            if (ConfirmQuit(Ir))
-                return QUIT_PAGE;
-            else
-                RedrawGenericList(ListUi);
-        }
-        else if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
-                 (Ir->Event.KeyEvent.wVirtualKeyCode == VK_ESCAPE))  /* ESC */
-        {
-            RestoreGenericListUiState(ListUi);
-            return nextPage;    // Use some "prevPage;" instead?
-        }
-        else if (Ir->Event.KeyEvent.uChar.AsciiChar == 0x0D) /* ENTER */
-        {
-            return nextPage;
-        }
-        else if ((Ir->Event.KeyEvent.uChar.AsciiChar > 0x60) && (Ir->Event.KeyEvent.uChar.AsciiChar < 0x7b))
-        {
-            /* a-z */
-            GenericListKeyPress(ListUi, Ir->Event.KeyEvent.uChar.AsciiChar);
-        }
-    }
-}
-
-
-/*
  * Displays the ComputerSettingsPage.
  *
  * Next pages:
@@ -1458,6 +1433,8 @@ static PAGE_NUMBER
 ComputerSettingsPage(PINPUT_RECORD Ir)
 {
     GENERIC_LIST_UI ListUi;
+    int selection;
+
     MUIDisplayPage(COMPUTER_SETTINGS_PAGE);
 
     InitGenericListUi(&ListUi, USetupData.ComputerList, GetSettingDescription);
@@ -1466,7 +1443,13 @@ ComputerSettingsPage(PINPUT_RECORD Ir)
                     xScreen - 3,
                     yScreen - 3);
 
-    return HandleGenericList(&ListUi, DEVICE_SETTINGS_PAGE, Ir);
+    selection = HandleGenericList(&ListUi, Ir, NULL);
+    if (selection == SETUP_QUIT)
+        return QUIT_PAGE;
+
+    ASSERT(selection == SETUP_OK || selection == SETUP_CANCEL);
+
+    return DEVICE_SETTINGS_PAGE;
 }
 
 
@@ -1484,6 +1467,8 @@ static PAGE_NUMBER
 DisplaySettingsPage(PINPUT_RECORD Ir)
 {
     GENERIC_LIST_UI ListUi;
+    int selection;
+
     MUIDisplayPage(DISPLAY_SETTINGS_PAGE);
 
     InitGenericListUi(&ListUi, USetupData.DisplayList, GetSettingDescription);
@@ -1492,7 +1477,14 @@ DisplaySettingsPage(PINPUT_RECORD Ir)
                     xScreen - 3,
                     yScreen - 3);
 
-    return HandleGenericList(&ListUi, DEVICE_SETTINGS_PAGE, Ir);
+    selection = HandleGenericList(&ListUi, Ir, NULL);
+    if (selection == SETUP_QUIT)
+        return QUIT_PAGE;
+
+    ASSERT(selection == SETUP_OK || selection == SETUP_CANCEL);
+
+    return DEVICE_SETTINGS_PAGE;
+
 }
 
 
@@ -1510,6 +1502,8 @@ static PAGE_NUMBER
 KeyboardSettingsPage(PINPUT_RECORD Ir)
 {
     GENERIC_LIST_UI ListUi;
+    int selection;
+
     MUIDisplayPage(KEYBOARD_SETTINGS_PAGE);
 
     InitGenericListUi(&ListUi, USetupData.KeyboardList, GetSettingDescription);
@@ -1518,7 +1512,13 @@ KeyboardSettingsPage(PINPUT_RECORD Ir)
                     xScreen - 3,
                     yScreen - 3);
 
-    return HandleGenericList(&ListUi, DEVICE_SETTINGS_PAGE, Ir);
+    selection = HandleGenericList(&ListUi, Ir, NULL);
+    if (selection == SETUP_QUIT)
+        return QUIT_PAGE;
+
+    ASSERT(selection == SETUP_OK || selection == SETUP_CANCEL);
+
+    return DEVICE_SETTINGS_PAGE;
 }
 
 
@@ -1536,6 +1536,8 @@ static PAGE_NUMBER
 LayoutSettingsPage(PINPUT_RECORD Ir)
 {
     GENERIC_LIST_UI ListUi;
+    int selection;
+
     MUIDisplayPage(LAYOUT_SETTINGS_PAGE);
 
     InitGenericListUi(&ListUi, USetupData.LayoutList, GetSettingDescription);
@@ -1544,7 +1546,13 @@ LayoutSettingsPage(PINPUT_RECORD Ir)
                     xScreen - 3,
                     yScreen - 3);
 
-    return HandleGenericList(&ListUi, DEVICE_SETTINGS_PAGE, Ir);
+    selection = HandleGenericList(&ListUi, Ir, NULL);
+    if (selection == SETUP_QUIT)
+        return QUIT_PAGE;
+    
+    ASSERT(selection == SETUP_OK || selection == SETUP_CANCEL);
+
+    return DEVICE_SETTINGS_PAGE;
 }
 
 
