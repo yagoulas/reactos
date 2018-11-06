@@ -88,10 +88,10 @@ FormatCallback(
 NTSTATUS
 FormatPartition(
     IN PUNICODE_STRING DriveRoot,
-    IN PFILE_SYSTEM_ITEM FileSystemItem)
+    IN PFILE_SYSTEM FileSystem,
+    IN BOOLEAN QuickFormat)
 {
     NTSTATUS Status;
-    PFILE_SYSTEM FileSystem = FileSystemItem->FileSystem;
 
     if (!FileSystem || !FileSystem->FormatFunc)
         return STATUS_NOT_SUPPORTED;
@@ -110,7 +110,7 @@ FormatPartition(
     Status = FileSystem->FormatFunc(DriveRoot,
                                     FMIFS_HARDDISK,              /* MediaFlag */
                                     NULL,                        /* Label */
-                                    FileSystemItem->QuickFormat, /* QuickFormat */
+                                    QuickFormat,                 /* QuickFormat */
                                     0,                           /* ClusterSize */
                                     FormatCallback);             /* Callback */
 

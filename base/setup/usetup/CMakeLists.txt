@@ -19,7 +19,6 @@ list(APPEND SOURCE
     consup.c
     devinst.c
     format.c
-    fslist.c
     genlist.c
     keytrans.c
     mui.c

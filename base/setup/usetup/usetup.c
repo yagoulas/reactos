@@ -60,7 +60,8 @@ static HANDLE hPnpThread = NULL;
 
 static PPARTLIST PartitionList = NULL;
 static PPARTENTRY TempPartition = NULL;
-static PFILE_SYSTEM_LIST FileSystemList = NULL;
+static PFILE_SYSTEM SelectedFileSystem = NULL;
+static BOOLEAN SelectedQuickFormat = FALSE;
 static FORMATMACHINESTATE FormatState = Start;
 
 /*****************************************************/
@@ -2518,6 +2519,9 @@ SelectFileSystemPage(PINPUT_RECORD Ir)
     PCHAR PartUnit;
     CHAR PartTypeString[32];
     FORMATMACHINESTATE PreviousFormatState;
+    PFILE_SYSTEM FileSystems;
+    ULONG FileSystemsCount;
+    int i, *listIndices, selection;
 
     DPRINT("SelectFileSystemPage()\n");
 
@@ -2744,82 +2748,72 @@ SelectFileSystemPage(PINPUT_RECORD Ir)
                             DiskEntry->NoMbr ? "GPT" : "MBR");
     }
 
-    if (FileSystemList == NULL)
-    {
-        /* Create the file system list, and by default select the "FAT" file system */
-        FileSystemList = CreateFileSystemList(6, 26, PartEntry->New, L"FAT");
-        if (FileSystemList == NULL)
-        {
-            /* FIXME: show an error dialog */
-            return QUIT_PAGE;
-        }
-    }
-
     if (RepairUpdateFlag)
     {
         return CHECK_FILE_SYSTEM_PAGE;
         //return SELECT_PARTITION_PAGE;
     }
 
+    /* This array doesn't need to be freed */
+    FileSystems = GetRegisteredFileSystems(&FileSystemsCount);
+
     if (IsUnattendedSetup)
     {
         if (USetupData.FormatPartition)
         {
             /*
-             * We use whatever currently selected file system we have
-             * (by default, this is "FAT", as per the initialization
-             * performed above). Note that it may be interesting to specify
+             * We use the first fs that is supported.
+             * Note that it may be interesting to specify
              * which file system to use in unattended installations, in the
              * txtsetup.sif file.
              */
+            SelectedFileSystem = FileSystems;
+            SelectedQuickFormat = TRUE;
             return FORMAT_PARTITION_PAGE;
         }
 
         return CHECK_FILE_SYSTEM_PAGE;
     }
 
-    DrawFileSystemList(FileSystemList);
-
-    while (TRUE)
+    listIndices = RtlAllocateHeap(ProcessHeap, 0, sizeof(int) * (2 * FileSystemsCount + 1));
+    if (listIndices == NULL)
     {
-        CONSOLE_ConInKey(Ir);
-
-        if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
-            (Ir->Event.KeyEvent.wVirtualKeyCode == VK_F3))  /* F3 */
-        {
-            if (ConfirmQuit(Ir))
-                return QUIT_PAGE;
-
-            break;
-        }
-        else if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
-                 (Ir->Event.KeyEvent.wVirtualKeyCode == VK_ESCAPE))  /* ESC */
-        {
-            FormatState = Start;
-            return SELECT_PARTITION_PAGE;
-        }
-        else if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
-                 (Ir->Event.KeyEvent.wVirtualKeyCode == VK_DOWN))  /* DOWN */
-        {
-            ScrollDownFileSystemList(FileSystemList);
-        }
-        else if ((Ir->Event.KeyEvent.uChar.AsciiChar == 0x00) &&
-                 (Ir->Event.KeyEvent.wVirtualKeyCode == VK_UP))  /* UP */
-        {
-            ScrollUpFileSystemList(FileSystemList);
-        }
-        else if (Ir->Event.KeyEvent.wVirtualKeyCode == VK_RETURN) /* ENTER */
-        {
-            if (!FileSystemList->Selected->FileSystem)
-                return SELECT_FILE_SYSTEM_PAGE;
-            else
-                return FORMAT_PARTITION_PAGE;
-        }
+        /* FIXME: show an error dialog */
+        return QUIT_PAGE;
     }
 
-    FormatState = PreviousFormatState;
+    /* Render the available options on the screen */
+    CONSOLE_SetTextXY(6, 27, MUIGetString(STRING_KEEPFORMAT));
+    listIndices[2 * FileSystemsCount]=27;
 
-    return SELECT_FILE_SYSTEM_PAGE;
+    for (i = 0; i < FileSystemsCount; i++)
+    {
+        CONSOLE_PrintTextXY(6, 28 + i * 2, MUIGetString(STRING_FORMATDISK1), FileSystems[i].FileSystemName);
+        CONSOLE_PrintTextXY(6, 28 + i * 2 + 1, MUIGetString(STRING_FORMATDISK2), FileSystems[i].FileSystemName);
+        listIndices[i*2]=28 + i * 2;
+        listIndices[i*2+1]=28 + i * 2+1;
+    }
+
+    selection = SetupHandleSimpleList(Ir, listIndices, 2 * FileSystemsCount + 1, 6, 58);
+
+    RtlFreeHeap(ProcessHeap, 0, listIndices);
+
+    SelectedFileSystem = NULL;
+
+    if (selection == SETUP_QUIT)
+        return QUIT_PAGE;
+    else if (selection == SETUP_QUIT_CANCELED)
+        return SELECT_FILE_SYSTEM_PAGE;
+    else if (selection == SETUP_CANCEL)
+        return SELECT_PARTITION_PAGE;
+    else if (selection == 27)
+        return FORMAT_PARTITION_PAGE;
+
+    ASSERT(selection > 27 && (selection-28)/2 < FileSystemsCount);
+    SelectedFileSystem = &FileSystems[(selection-28)/2];
+    SelectedQuickFormat = (selection%2 == 0);
+
+    return FORMAT_PARTITION_PAGE;
 }
 
 
@@ -2844,7 +2838,6 @@ FormatPartitionPage(PINPUT_RECORD Ir)
     NTSTATUS Status;
     PDISKENTRY DiskEntry;
     PPARTENTRY PartEntry;
-    PFILE_SYSTEM_ITEM SelectedFileSystem;
     UNICODE_STRING PartitionRootPath;
     WCHAR PathBuffer[MAX_PATH];
     CHAR Buffer[MAX_PATH];
@@ -2868,8 +2861,6 @@ FormatPartitionPage(PINPUT_RECORD Ir)
     PartEntry = TempPartition;
     DiskEntry = PartEntry->DiskEntry;
 
-    SelectedFileSystem = FileSystemList->Selected;
-
     if (!IsUnattendedSetup)
     {
         switch(SetupGetSimpleInput(Ir, FALSE, NULL))
@@ -2883,7 +2874,7 @@ FormatPartitionPage(PINPUT_RECORD Ir)
 
     CONSOLE_SetStatusText(MUIGetString(STRING_PLEASEWAIT));
 
-    if (!PreparePartitionForFormatting(PartEntry, SelectedFileSystem->FileSystem))
+    if (!PreparePartitionForFormatting(PartEntry, SelectedFileSystem))
     {
         /* FIXME: show an error dialog */
         return QUIT_PAGE;
@@ -2933,10 +2924,11 @@ FormatPartitionPage(PINPUT_RECORD Ir)
     DPRINT("PartitionRootPath: %wZ\n", &PartitionRootPath);
 
     /* Format the partition */
-    if (SelectedFileSystem->FileSystem)
+    if (SelectedFileSystem)
     {
         Status = FormatPartition(&PartitionRootPath,
-                                 SelectedFileSystem);
+                                 SelectedFileSystem,
+                                 SelectedQuickFormat);
         if (Status == STATUS_NOT_SUPPORTED)
         {
             int selection;
@@ -2945,7 +2937,7 @@ FormatPartitionPage(PINPUT_RECORD Ir)
                     "\n"
                     "  \x07  Press ENTER to continue Setup.\n"
                     "  \x07  Press F3 to quit Setup.",
-                    SelectedFileSystem->FileSystem->FileSystemName);
+                    SelectedFileSystem->FileSystemName);
 
             PopupError(Buffer,
                        MUIGetString(STRING_QUITCONTINUE),
@@ -2981,9 +2973,6 @@ FormatPartitionPage(PINPUT_RECORD Ir)
  * Next pages:
  *  InstallDirectoryPage (At once)
  *  QuitPage
- *
- * SIDEEFFECTS
- *  Inits or reloads FileSystemList
  *
  * RETURNS
  *   Number of the next page.
@@ -3157,13 +3146,6 @@ InstallDirectoryPage(PINPUT_RECORD Ir)
     PDISKENTRY DiskEntry;
     PPARTENTRY PartEntry;
     WCHAR InstallDir[MAX_PATH];
-
-    /* We do not need the filesystem list anymore */
-    if (FileSystemList != NULL)
-    {
-        DestroyFileSystemList(FileSystemList);
-        FileSystemList = NULL;
-    }
 
     if (PartitionList == NULL ||
         PartitionList->CurrentDisk == NULL ||
@@ -4108,13 +4090,6 @@ QuitPage(PINPUT_RECORD Ir)
 
     TempPartition = NULL;
     FormatState = Start;
-
-    /* Destroy the filesystem list */
-    if (FileSystemList != NULL)
-    {
-        DestroyFileSystemList(FileSystemList);
-        FileSystemList = NULL;
-    }
 
     CONSOLE_SetStatusText(MUIGetString(STRING_REBOOTCOMPUTER2));
 

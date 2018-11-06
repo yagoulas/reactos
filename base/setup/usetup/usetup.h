@@ -60,7 +60,6 @@
 /* Internal Headers */
 #include "consup.h"
 #include "progress.h"
-#include "fslist.h"
 #include "partlist.h"
 #include "genlist.h"
 #include "mui.h"
