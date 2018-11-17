@@ -20,18 +20,22 @@
 #include <atlcom.h>
 #include <atlcoll.h>
 #include <atlstr.h>
+#include <atlwin.h>
 #include <iphlpapi.h>
 #include <setupapi.h>
 #include <devguid.h>
 #include <netcon.h>
-#include <shlguid_undoc.h>
 #include <prsht.h>
-#include <undocshell.h>
-#include <shellutils.h>
 
 #include <netcfgx.h>
 #include <netcfgn.h>
 #include <strsafe.h>
+
+#include <shlguid_undoc.h>
+#include <undocshell.h>
+#include <shellutils.h>
+#include <rosctrls.h>
+#include <rosdlgs.h>
 
 #include <wine/debug.h>
 WINE_DEFAULT_DEBUG_CHANNEL(shell);
