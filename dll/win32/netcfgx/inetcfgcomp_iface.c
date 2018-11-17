@@ -229,6 +229,9 @@ INetCfgComponent_fnGetPnpDevNodeId(
     if (!IsEqualGUID(&GUID_DEVCLASS_NET, &This->pItem->ClassGUID))
         return E_NOTIMPL;
 
+    if (!This->pItem->szNodeId)
+        return E_FAIL;
+
     szNode = CoTaskMemAlloc((wcslen(This->pItem->szNodeId)+1) * sizeof(WCHAR));
     if (!szNode)
         return E_OUTOFMEMORY;
