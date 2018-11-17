@@ -175,12 +175,12 @@ public:
         return SendMessage(LVM_GETITEMSTATE, i, (LPARAM)mask);
     }
 
-    void SetItemState(int i, UINT state, UINT mask)
+    BOOL SetItemState(int i, UINT state, UINT mask)
     {
         LV_ITEM item;
         item.stateMask = mask; 
         item.state = state;
-        SendMessage(LVM_SETITEMSTATE, i, reinterpret_cast<LPARAM>(&item));
+        return (BOOL)SendMessage(LVM_SETITEMSTATE, i, reinterpret_cast<LPARAM>(&item));
     }
 
     int HitTest(LV_HITTESTINFO * phtInfo)
@@ -228,6 +228,11 @@ public:
     BOOL Arrange(UINT nCode)
     {
         return (BOOL)SendMessage(LVM_ARRANGE, nCode, 0);
+    }
+
+    BOOL SetCheckState(int nItem, BOOL bCheck)
+    {
+        return SetItemState(nItem, INDEXTOSTATEIMAGEMASK((bCheck)?2:1),LVIS_STATEIMAGEMASK);
     }
 
 };
