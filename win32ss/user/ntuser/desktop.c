@@ -2601,6 +2601,11 @@ NtUserOpenInputDesktop(
     HDESK hdesk = NULL;
     ULONG HandleAttributes = 0;
 
+    if (gpdeskInputDesktop == NULL)
+    {
+        return NULL;
+    }
+    
     UserEnterExclusive();
     TRACE("Enter NtUserOpenInputDesktop gpdeskInputDesktop 0x%p\n",gpdeskInputDesktop);
 
