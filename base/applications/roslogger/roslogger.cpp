@@ -15,13 +15,43 @@ class BaseDebugger
 {
 public:
     BaseDebugger()
-        :mProcess(NULL)
+        :m_Process(NULL)
     {
     }
 
+    virtual DWORD OnDebugStringEvent(DEBUG_EVENT& evt)
+    {
+        return DBG_CONTINUE;
+    }
+
+    virtual DWORD OnLoadDllEvent(DEBUG_EVENT& evt)
+    {
+        return DBG_CONTINUE;
+    }
+
+    virtual DWORD OnExceptionEvent(DEBUG_EVENT& evt)
+    {
+        return DBG_CONTINUE;
+    }
+    
     virtual DWORD handle_event(DEBUG_EVENT& evt)
     {
         HANDLE close_handle = NULL;
+        DWORD ret = DBG_CONTINUE;
+
+        switch(evt.dwDebugEventCode)
+        {
+            case OUTPUT_DEBUG_STRING_EVENT:
+                ret = OnDebugStringEvent(evt);
+                break;
+            case LOAD_DLL_DEBUG_EVENT:
+                ret = OnLoadDllEvent(evt);
+                break;
+            case EXCEPTION_DEBUG_EVENT:
+                ret = OnExceptionEvent(evt);
+                break;
+        }
+
         if (evt.dwDebugEventCode == CREATE_PROCESS_DEBUG_EVENT)
         {
             close_handle = evt.u.CreateProcessInfo.hFile;
@@ -34,7 +64,7 @@ public:
         if (close_handle)
             CloseHandle(close_handle);
 
-        return DBG_CONTINUE;
+        return ret;
     }
     
     BOOL debugger_loop()
@@ -47,19 +77,19 @@ public:
             ret = WaitForDebugEvent(&ev, INFINITE);
 
             if (ev.dwDebugEventCode == CREATE_PROCESS_DEBUG_EVENT)
-                mProcess = ev.u.CreateProcessInfo.hProcess;
+                m_Process = ev.u.CreateProcessInfo.hProcess;
 
             DWORD dwContinueStatus = handle_event(ev);
 
             if (ev.dwDebugEventCode == EXIT_PROCESS_DEBUG_EVENT)
                 break;
-
+            
             ret = ContinueDebugEvent(ev.dwProcessId, ev.dwThreadId, dwContinueStatus);
 
             if (!ret)
                 break;
         }
-        mProcess = NULL;
+        m_Process = NULL;
         
         return ret;
     }
@@ -87,29 +117,20 @@ public:
         DebugActiveProcess(pid);
     }
 
-    HANDLE mProcess;
+    HANDLE m_Process;
 
 };
 
 class CaptureDbgOut :public BaseDebugger
 {
 public:
-    virtual DWORD handle_event(DEBUG_EVENT& evt)
+    virtual DWORD OnDebugStringEvent(DEBUG_EVENT& evt)
     {
-        if (evt.dwDebugEventCode == OUTPUT_DEBUG_STRING_EVENT)
-        {
-            read_dbgstr(mProcess, evt.u.DebugString);
-        }
-        return BaseDebugger::handle_event(evt);
-    }
-
-    void read_dbgstr(HANDLE hProcess, OUTPUT_DEBUG_STRING_INFO& info)
-    {
-        DWORD dwSize = info.nDebugStringLength * (info.fUnicode ? 2 : 1);
+        DWORD dwSize = evt.u.DebugString.nDebugStringLength * (evt.u.DebugString.fUnicode ? 2 : 1);
         char* buffer = new char[dwSize];
         DWORD dwRead;
-        ReadProcessMemory(hProcess, info.lpDebugStringData, buffer, dwSize, &dwRead);
-        if (info.fUnicode)
+        ReadProcessMemory(m_Process, evt.u.DebugString.lpDebugStringData, buffer, dwSize, &dwRead);
+        if (evt.u.DebugString.fUnicode)
         {
             log_message((wchar_t*)buffer);
         }
@@ -119,8 +140,10 @@ public:
         }
 
         delete[] buffer;
+
+        return DBG_CONTINUE;
     }
-    
+
     virtual void log_message(const char* buffer)
     {
         printf("%s", buffer);
@@ -136,28 +159,18 @@ class LdrLogger :public CaptureDbgOut
 {
 private:
 
-    virtual DWORD handle_event(DEBUG_EVENT& evt)
+    virtual DWORD OnLoadDllEvent(DEBUG_EVENT& evt)
     {
-        if (evt.dwDebugEventCode == LOAD_DLL_DEBUG_EVENT)
-        {
-            HANDLE hFileMapping = CreateFileMappingA(evt.u.LoadDll.hFile, NULL, PAGE_READONLY, 0, 0, "temp");
-            HANDLE hView = MapViewOfFile(hFileMapping, FILE_MAP_READ, 0, 0, 0);
-            char fileName[MAX_PATH];
-            /*DWORD length = */GetMappedFileNameA(mProcess, evt.u.LoadDll.lpBaseOfDll, fileName, MAX_PATH);
-            UnmapViewOfFile(hView);
-            CloseHandle(hFileMapping);
-            log_message(L"Loaded dll: ");
-            log_message(fileName);
-            log_message("\n");
-            
-        }
-
-        if (evt.dwDebugEventCode == OUTPUT_DEBUG_STRING_EVENT)
-        {
-            read_dbgstr(mProcess, evt.u.DebugString);
-        }
-
-        return BaseDebugger::handle_event(evt);
+        HANDLE hFileMapping = CreateFileMappingA(evt.u.LoadDll.hFile, NULL, PAGE_READONLY, 0, 0, "temp");
+        HANDLE hView = MapViewOfFile(hFileMapping, FILE_MAP_READ, 0, 0, 0);
+        char fileName[MAX_PATH];
+        /*DWORD length = */GetMappedFileNameA(m_Process, evt.u.LoadDll.lpBaseOfDll, fileName, MAX_PATH);
+        UnmapViewOfFile(hView);
+        CloseHandle(hFileMapping);
+        log_message(L"Loaded dll: ");
+        log_message(fileName);
+        log_message("\n");
+        return DBG_CONTINUE;
     }
 };
 
@@ -168,57 +181,56 @@ void EndStackBacktrace(HANDLE ProcessHandle);
 class DbgLogger :public LdrLogger
 {
 private: 
-    FILE * file;
-    
+    FILE * m_file;
+
+    virtual DWORD OnExceptionEvent(DEBUG_EVENT& evt)
+    {
+        if (evt.u.Exception.dwFirstChance)
+            log_message(L"Got first change exception:\n");
+        else
+            log_message(L"Got second change exception:\n");
+
+        HANDLE hThread = OpenThread(THREAD_ALL_ACCESS, FALSE, evt.dwThreadId);
+        HANDLE hProcess = OpenThread(PROCESS_ALL_ACCESS, FALSE, evt.dwProcessId);
+        CONTEXT Context;
+        Context.ContextFlags = CONTEXT_INTEGER | CONTEXT_CONTROL | CONTEXT_DEBUG_REGISTERS;
+        GetThreadContext(hThread, &Context);
+        BeginStackBacktrace(hProcess);
+        PrintStackBacktrace(m_file, hProcess, hThread, Context);
+        EndStackBacktrace(hProcess);
+
+        return DBG_CONTINUE;
+    }
+
     void log_message(const char* buffer)
     {
-        CaptureDbgOut::log_message(buffer);
-        if (file)
+        printf("%s", buffer);
+
+        if (m_file)
         {
-            fprintf(file, "%s", buffer);
-            fflush(file);
+            fprintf(m_file, "%s", buffer);
+            fflush(m_file);
         }
     }
 
     void log_message(const wchar_t* buffer)
     {
-        CaptureDbgOut::log_message(buffer);
-        if (file)
+        printf("%ls", buffer);
+
+        if (m_file)
         {
-            fprintf(file, "%ls", buffer);
-            fflush(file);
+            fprintf(m_file, "%ls", buffer);
+            fflush(m_file);
         }
-    }
-    
-    DWORD handle_event(DEBUG_EVENT& evt)
-    {
-        if (evt.dwDebugEventCode == EXCEPTION_DEBUG_EVENT)
-        {
-            if (evt.u.Exception.dwFirstChance)
-                log_message(L"Got first change exception:\n");
-            else
-                log_message(L"Got second change exception:\n");
-            
-            HANDLE hThread = OpenThread(THREAD_ALL_ACCESS, FALSE, evt.dwThreadId);
-            HANDLE hProcess = OpenThread(PROCESS_ALL_ACCESS, FALSE, evt.dwProcessId);
-            CONTEXT Context;
-            Context.ContextFlags = CONTEXT_INTEGER | CONTEXT_CONTROL | CONTEXT_DEBUG_REGISTERS;
-            GetThreadContext(hThread, &Context);
-            BeginStackBacktrace(hProcess);
-            PrintStackBacktrace(file, hProcess, hThread, Context);
-            EndStackBacktrace(hProcess);
-        }
-        
-        return BaseDebugger::handle_event(evt);
     }
 
 public:
-    DbgLogger(WCHAR* file_name)
+    DbgLogger(WCHAR* file_name = NULL)
     {
         if (file_name)
-            file = _wfopen(file_name, L"a+");
+            m_file = _wfopen(file_name, L"a+");
         else
-            file = NULL;
+            m_file = NULL;
     }
 };
 
