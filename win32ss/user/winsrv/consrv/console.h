@@ -51,4 +51,5 @@ ConSrvValidateConsole(OUT struct _CONSRV_CONSOLE** /* PCONSRV_CONSOLE* */ Consol
 NTSTATUS
 ConSrvConsoleCtrlEventTimeout(IN ULONG CtrlEvent,
                               IN PCONSOLE_PROCESS_DATA ProcessData,
-                              IN ULONG Timeout);
+                              IN ULONG Timeout,
+                              OUT ULONG *ExitCode);

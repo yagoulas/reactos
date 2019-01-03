@@ -808,16 +808,25 @@ ConSrvDeleteConsole(PCONSRV_CONSOLE Console)
 NTSTATUS
 ConSrvConsoleCtrlEventTimeout(IN ULONG CtrlEvent,
                               IN PCONSOLE_PROCESS_DATA ProcessData,
-                              IN ULONG Timeout)
+                              IN ULONG Timeout,
+                              OUT ULONG *ExitCode)
 {
     NTSTATUS Status = STATUS_SUCCESS;
 
     DPRINT("ConSrvConsoleCtrlEventTimeout Parent ProcessId = %x\n", ProcessData->Process->ClientId.UniqueProcess);
 
+    if (ExitCode)
+    {
+        *ExitCode = STILL_ACTIVE;
+    }
+
     /*
      * Be sure we effectively have a control routine. It resides in kernel32.dll (client).
      */
-    if (ProcessData->CtrlRoutine == NULL) return Status;
+    if (ProcessData->CtrlRoutine == NULL)
+    {
+        return Status;
+    }
 
     _SEH2_TRY
     {
@@ -837,7 +846,11 @@ ConSrvConsoleCtrlEventTimeout(IN ULONG CtrlEvent,
             {
                 DPRINT("ProcessData->CtrlRoutine remote thread creation succeeded, ProcessId = %x, Process = 0x%p\n",
                        ProcessData->Process->ClientId.UniqueProcess, ProcessData->Process);
-                WaitForSingleObject(Thread, Timeout);
+                Status = WaitForSingleObject(Thread, Timeout);
+                if (Status == 0 && ExitCode)
+                {
+                    GetExitCodeThread(Thread, ExitCode);
+                }
             }
         }
         _SEH2_FINALLY
@@ -860,7 +873,7 @@ NTSTATUS
 ConSrvConsoleCtrlEvent(IN ULONG CtrlEvent,
                        IN PCONSOLE_PROCESS_DATA ProcessData)
 {
-    return ConSrvConsoleCtrlEventTimeout(CtrlEvent, ProcessData, 0);
+    return ConSrvConsoleCtrlEventTimeout(CtrlEvent, ProcessData, 0, NULL);
 }
 
 PCONSOLE_PROCESS_DATA NTAPI
