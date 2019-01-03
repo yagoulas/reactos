@@ -9,11 +9,83 @@
 /* INCLUDES *******************************************************************/
 
 #include "consrv.h"
+#include <psapi.h>
 
 #define NDEBUG
 #include <debug.h>
 
 /* FUNCTIONS ******************************************************************/
+
+extern ULONG_PTR LogonProcessId;
+
+static void 
+NotifyConsoleProcessForShutdown(IN PCSR_PROCESS CsrProcess,
+                                IN PCONSOLE_PROCESS_DATA ProcessData,
+                                IN ULONG Flags)
+{
+    DPRINT1("ConsoleClientShutdown(0x%p, 0x%x, %s) - Console process [0x%x, 0x%x]\n",
+             CsrProcess, Flags, CsrProcess->ClientId.UniqueProcess, CsrProcess->ClientId.UniqueThread);
+
+    /* Send a log-off event. In reality this should be way more complex */
+    ConSrvConsoleCtrlEventTimeout(CTRL_LOGOFF_EVENT, ProcessData, 
+                                  ShutdownSettings.WaitToKillAppTimeout);
+}
+
+static BOOL
+NotifyGenericProcessForShutdown(IN PCSR_PROCESS CsrProcess,
+                                IN ULONG Flags)
+{
+    /* FIXME: Implement the generic process shutdown handler */
+    UNIMPLEMENTED_ONCE;
+
+    return TRUE;
+}
+
+ULONG
+NTAPI
+NonConsoleProcessShutdown(IN PCSR_PROCESS Process,
+                          IN ULONG Flags)
+{
+    BOOL KillIt;
+
+    /* Do not kill system processes when a user is logging off */
+    if ((Flags & EWX_SHUTDOWN) == EWX_LOGOFF &&
+        (Process->ShutdownFlags & (CsrShutdownSystem | CsrShutdownOther)))
+    {
+        DPRINT("Do not kill a system process in a logoff request!\n");
+        return CsrShutdownNonCsrProcess;
+    }
+
+    /* Do not kill Winlogon or CSRSS */
+    if (Process->ClientId.UniqueProcess == NtCurrentProcess() ||
+        Process->ClientId.UniqueProcess == UlongToHandle(LogonProcessId))
+    {
+        return CsrShutdownNonCsrProcess;
+    }
+
+    KillIt = NotifyGenericProcessForShutdown(Process, Flags);
+    if (KillIt)
+    {
+        /* Terminate this process */
+#if DBG
+        WCHAR buffer[MAX_PATH];
+        if (!GetProcessImageFileNameW(Process->ProcessHandle, buffer, MAX_PATH))
+        {
+            DPRINT1("Terminating process %x\n", Process->ClientId.UniqueProcess);
+        }
+        else
+        {
+            DPRINT1("Terminating process %x (%S)\n", Process->ClientId.UniqueProcess, buffer);
+        }
+#endif
+
+        NtTerminateProcess(Process->ProcessHandle, 0);
+        WaitForSingleObject(Process->ProcessHandle, ShutdownSettings.ProcessTerminateTimeout);
+    }
+
+    CsrDereferenceProcess(Process);
+    return CsrShutdownCsrProcess;
+}
 
 // NOTE: See http://blogs.msdn.com/b/ntdebugging/archive/2007/06/09/how-windows-shuts-down.aspx
 ULONG
@@ -24,14 +96,10 @@ ConsoleClientShutdown(IN PCSR_PROCESS CsrProcess,
 {
     PCONSOLE_PROCESS_DATA ProcessData = ConsoleGetPerProcessData(CsrProcess);
 
-    //FIXME: UNIMPLEMENTED!
-
     if ( ProcessData->ConsoleHandle != NULL ||
          ProcessData->HandleTable   != NULL )
     {
-        DPRINT("ConsoleClientShutdown(0x%p, 0x%x, %s) - Console process [0x%x, 0x%x]\n",
-                CsrProcess, Flags, FirstPhase ? "FirstPhase" : "LastPhase",
-                CsrProcess->ClientId.UniqueProcess, CsrProcess->ClientId.UniqueThread);
+        NotifyConsoleProcessForShutdown(CsrProcess, ProcessData, Flags);
 
         /* We are done with the process itself */
         CsrDereferenceProcess(CsrProcess);
@@ -43,13 +111,11 @@ ConsoleClientShutdown(IN PCSR_PROCESS CsrProcess,
                 CsrProcess, Flags, FirstPhase ? "FirstPhase" : "LastPhase",
                 CsrProcess->ClientId.UniqueProcess, CsrProcess->ClientId.UniqueThread);
 
-        /* On first pass, ignore the process since the GUI server should take it... */
+        /* On first pass, let the gui server terminate all the processes that it owns */
         if (FirstPhase) return CsrShutdownNonCsrProcess;
 
-        /* ... otherwise, call the generic handler */
-        // FIXME: Should call a generic shutdown handler!!
-        CsrDereferenceProcess(CsrProcess);
-        return CsrShutdownCsrProcess;
+        /* Use the generic handler since this isn't a gui process */
+        return NonConsoleProcessShutdown(CsrProcess, Flags);
     }
 
     return CsrShutdownNonCsrProcess;
