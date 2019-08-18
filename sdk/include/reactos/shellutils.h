@@ -379,4 +379,139 @@ HRESULT inline SHSetStrRet(LPSTRRET pStrRet, HINSTANCE hInstance, DWORD resId)
 #define S_GREATERTHAN S_FALSE
 #define MAKE_COMPARE_HRESULT(x) ((x)>0 ? S_GREATERTHAN : ((x)<0 ? S_LESSTHAN : S_EQUAL))
 
+
+static inline ULONG
+Win32DbgPrint(const char *filename, int line, const char *lpFormat, ...)
+{
+    char szMsg[512];
+    char *szMsgStart;
+    const char *fname;
+    va_list vl;
+    ULONG uRet;
+
+    fname = strrchr(filename, '\\');
+    if (fname == NULL)
+    {
+        fname = strrchr(filename, '/');
+        if (fname != NULL)
+            fname++;
+    }
+    else
+        fname++;
+
+    if (fname == NULL)
+        fname = filename;
+
+    szMsgStart = szMsg + sprintf(szMsg, "%s:%d: ", fname, line);
+
+    va_start(vl, lpFormat);
+    uRet = (ULONG) vsprintf(szMsgStart, lpFormat, vl);
+    va_end(vl);
+
+    OutputDebugStringA(szMsg);
+
+    return uRet;
+}
+
+#define DbgPrint(fmt, ...) \
+    Win32DbgPrint(__FILE__, __LINE__, fmt, ##__VA_ARGS__)
+
+static inline void DbgDumpMenuInternal(HMENU hmenu, char* padding, int padlevel)
+{
+    WCHAR label[128];
+    int i;
+    int count = GetMenuItemCount(hmenu);
+
+    padding[padlevel] = '.';
+    padding[padlevel + 1] = '.';
+    padding[padlevel + 2] = 0;
+
+    for (i = 0; i < count; i++)
+    {
+        MENUITEMINFOW mii = { 0 };
+
+        mii.cbSize = sizeof(mii);
+        mii.fMask = MIIM_STRING | MIIM_FTYPE | MIIM_SUBMENU | MIIM_STATE | MIIM_ID;
+        mii.dwTypeData = label;
+        mii.cch = _countof(label);
+
+        GetMenuItemInfoW(hmenu, i, TRUE, &mii);
+
+        if (mii.fType & MFT_BITMAP)
+            DbgPrint("%s%2d - %08x: BITMAP %08p (state=%d, has submenu=%s)\n", padding, i, mii.wID, mii.hbmpItem, mii.fState, mii.hSubMenu ? "TRUE" : "FALSE");
+        else if (mii.fType & MFT_SEPARATOR)
+            DbgPrint("%s%2d - %08x ---SEPARATOR---\n", padding, i, mii.wID);
+        else
+            DbgPrint("%s%2d - %08x: %S (state=%d, has submenu=%s)\n", padding, i, mii.wID, mii.dwTypeData, mii.fState, mii.hSubMenu ? "TRUE" : "FALSE");
+
+        if (mii.hSubMenu)
+            DbgDumpMenuInternal(mii.hSubMenu, padding, padlevel + 2);
+
+    }
+
+    padding[padlevel] = 0;
+}
+
+static __inline void DbgDumpMenu(HMENU hmenu)
+{
+    char padding[128];
+    DbgDumpMenuInternal(hmenu, padding, 0);
+}
+
+
+static inline
+void DumpIdList(LPCITEMIDLIST pcidl)
+{
+    DbgPrint("Begin IDList Dump\n");
+
+    for (; pcidl != NULL; pcidl = ILGetNext(pcidl))
+    {
+        int i;
+        int cb = pcidl->mkid.cb;
+        BYTE * sh = (BYTE*) &(pcidl->mkid);
+        if (cb == 0) // ITEMIDLISTs are terminatedwith a null SHITEMID.
+            break;
+        DbgPrint("Begin SHITEMID (cb=%d)\n", cb);
+        if ((cb & 3) != 0)
+            DbgPrint(" - WARNING: cb is not a multiple of 4\n");
+        for (i = 0; (i + 4) <= cb; i += 4)
+        {
+            DbgPrint(" - abID[%08x]: %02x %02x %02x %02x\n",
+                     i,
+                     sh[i + 0],
+                     sh[i + 1],
+                     sh[i + 2],
+                     sh[i + 3]);
+        }
+        if (i < cb)
+        {
+            cb -= i;
+            if (cb == 3)
+            {
+                DbgPrint(" - abID[%08x]: %02x %02x %02x --\n",
+                         i,
+                         sh[i + 0],
+                         sh[i + 1],
+                         sh[i + 2]);
+            }
+            else if (cb == 2)
+            {
+                DbgPrint(" - abID[%08x]: %02x %02x -- --\n",
+                         i,
+                         sh[i + 0],
+                         sh[i + 1]);
+            }
+            else if (cb == 1)
+            {
+                DbgPrint(" - abID[%08x]: %02x -- -- --\n",
+                         i,
+                         sh[i + 0]);
+            }
+        }
+        DbgPrint("End SHITEMID\n");
+    }
+    DbgPrint("End IDList Dump.\n");
+}
+
+
 #endif /* __ROS_SHELL_UTILS_H */
