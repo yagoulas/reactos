@@ -56,27 +56,38 @@
 #define IDM_STARTMENU 204
 #define IDM_TRAYWND   205
 
-/* NOTE: The following constants may *NOT* be changed because
-         they're hardcoded and need to be the exact values
-         in order to get the start menu to work! */
-#define IDM_PROGRAMS                504
-#define IDM_FAVORITES               507
-#define IDM_DOCUMENTS               501
-#define IDM_SETTINGS                508
-#define IDM_CONTROLPANEL            505
-#define IDM_SECURITY                5001
-#define IDM_NETWORKCONNECTIONS      557
-#define IDM_PRINTERSANDFAXES        510
-#define IDM_TASKBARANDSTARTMENU     413
-#define IDM_SEARCH                  520
-#define IDM_HELPANDSUPPORT          503
-#define IDM_RUN                     401
-#define IDM_SYNCHRONIZE             553
-#define IDM_LOGOFF                  402
-#define IDM_DISCONNECT              5000
-#define IDM_UNDOCKCOMPUTER          410
-#define IDM_SHUTDOWN                506
+#define IDM_PROGRAMS                TRAYCMD_PROGRAMS
+#define IDM_FAVORITES               TRAYCMD_FAVORITES
+#define IDM_DOCUMENTS               TRAYCMD_DOCUMENTS
+#define IDM_SETTINGS                TRAYCMD_SETTINGS
+#define IDM_CONTROLPANEL            TRAYCMD_CONTROL_PANEL
+#define IDM_SECURITY                TRAYCMD_SECURITY
+#define IDM_NETWORKCONNECTIONS      TRAYCMD_NETWORKCONNECTIONS
+#define IDM_PRINTERSANDFAXES        TRAYCMD_PRINTERS
+#define IDM_TASKBARANDSTARTMENU     TRAYCMD_TASKBAR_PROPERTIES
+#define IDM_SEARCH                  TRAYCMD_SEARCH
+#define IDM_HELPANDSUPPORT          TRAYCMD_HELP_AND_SUPPORT
+#define IDM_RUN                     TRAYCMD_RUN
+#define IDM_SYNCHRONIZE             TRAYCMD_SYNCHRONIZE
+#define IDM_LOGOFF                  TRAYCMD_LOGOFF
+#define IDM_DISCONNECT              TRAYCMD_SWITCHUSER
+#define IDM_UNDOCKCOMPUTER          TRAYCMD_UNDOCKCOMPUTER
+#define IDM_SHUTDOWN                TRAYCMD_SHUTDOWN
 #define IDM_LASTSTARTMENU_SEPARATOR 450
+
+#define ID_SHELL_CMD_PROPERTIES         TRAYCMD_TASKBAR_PROPERTIES
+#define ID_SHELL_CMD_OPEN_ALL_USERS     (601)
+#define ID_SHELL_CMD_EXPLORE_ALL_USERS  (602)
+#define ID_LOCKTASKBAR                  TRAYCMD_LOCK_TASKBAR
+#define ID_SHELL_CMD_OPEN_TASKMGR       TRAYCMD_OPEN_TASKMGR
+#define ID_SHELL_CMD_UNDO_ACTION        (603)
+#define ID_SHELL_CMD_SHOW_DESKTOP       TRAYCMD_SHOW_DESKTOP
+#define ID_SHELL_CMD_TILE_WND_V         TRAYCMD_TILE_V
+#define ID_SHELL_CMD_TILE_WND_H         TRAYCMD_TILE_H
+#define ID_SHELL_CMD_CASCADE_WND        TRAYCMD_CASCADE
+#define ID_SHELL_CMD_CUST_NOTIF         (604)
+#define ID_SHELL_CMD_ADJUST_DAT         TRAYCMD_DATE_AND_TIME
+#define ID_SHELL_CMD_RESTORE_ALL        TRAYCMD_RESTORE_ALL
 
 /*******************************************************************************\
 |*                               Dialog Resources                              *|
@@ -182,16 +193,3 @@
 
 #define ID_SHELL_CMD_FIRST              0xF
 #define ID_SHELL_CMD_LAST               0x7FEF
-#define ID_SHELL_CMD_PROPERTIES         (401)
-#define ID_SHELL_CMD_OPEN_ALL_USERS     (402)
-#define ID_SHELL_CMD_EXPLORE_ALL_USERS  (403)
-#define ID_LOCKTASKBAR                  (404)
-#define ID_SHELL_CMD_OPEN_TASKMGR       (405)
-#define ID_SHELL_CMD_UNDO_ACTION        (406)
-#define ID_SHELL_CMD_SHOW_DESKTOP       (407)
-#define ID_SHELL_CMD_TILE_WND_V         (408)
-#define ID_SHELL_CMD_TILE_WND_H         (409)
-#define ID_SHELL_CMD_CASCADE_WND        (410)
-#define ID_SHELL_CMD_CUST_NOTIF         (411)
-#define ID_SHELL_CMD_ADJUST_DAT         (412)
-#define ID_SHELL_CMD_RESTORE_ALL        (413)

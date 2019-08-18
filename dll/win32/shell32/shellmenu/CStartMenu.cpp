@@ -25,29 +25,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(CStartMenu);
 
 //#define TEST_TRACKPOPUPMENU_SUBMENUS
 
-
-/* NOTE: The following constants *MUST NOT* be changed because
-         they're hardcoded and need to be the exact values
-         in order to get the start menu to work! */
-#define IDM_RUN                     401
-#define IDM_LOGOFF                  402
-#define IDM_UNDOCKCOMPUTER          410
-#define IDM_TASKBARANDSTARTMENU     413
-#define IDM_LASTSTARTMENU_SEPARATOR 450
-#define IDM_DOCUMENTS               501
-#define IDM_HELPANDSUPPORT          503
-#define IDM_PROGRAMS                504
-#define IDM_CONTROLPANEL            505
-#define IDM_SHUTDOWN                506
-#define IDM_FAVORITES               507
-#define IDM_SETTINGS                508
-#define IDM_PRINTERSANDFAXES        510
-#define IDM_SEARCH                  520
-#define IDM_SYNCHRONIZE             553
-#define IDM_NETWORKCONNECTIONS      557
-#define IDM_DISCONNECT              5000
-#define IDM_SECURITY                5001
-
 /*
  * TODO:
  * 1. append the start menu contents from all users
@@ -106,24 +83,24 @@ private:
         {
             // Smaller "24x24" icons used for the start menu
             // The bitmaps are still 32x32, but the image is centered
-        case IDM_FAVORITES: iconIndex = -322; break;
-        case IDM_SEARCH: iconIndex = -323; break;
-        case IDM_HELPANDSUPPORT: iconIndex = -324; break;
-        case IDM_LOGOFF: iconIndex = -325; break;
-        case IDM_PROGRAMS:  iconIndex = -326; break;
-        case IDM_DOCUMENTS: iconIndex = -327; break;
-        case IDM_RUN: iconIndex = -328; break;
-        case IDM_SHUTDOWN: iconIndex = -329; break;
-        case IDM_SETTINGS: iconIndex = -330; break;
+        case TRAYCMD_FAVORITES: iconIndex = -322; break;
+        case TRAYCMD_SEARCH: iconIndex = -323; break;
+        case TRAYCMD_HELP_AND_SUPPORT: iconIndex = -324; break;
+        case TRAYCMD_LOGOFF: iconIndex = -325; break;
+        case TRAYCMD_PROGRAMS:  iconIndex = -326; break;
+        case TRAYCMD_DOCUMENTS: iconIndex = -327; break;
+        case TRAYCMD_RUN: iconIndex = -328; break;
+        case TRAYCMD_SHUTDOWN: iconIndex = -329; break;
+        case TRAYCMD_SETTINGS: iconIndex = -330; break;
 
-        case IDM_CONTROLPANEL: iconIndex = -22; break;
-        case IDM_NETWORKCONNECTIONS: iconIndex = -257; break;
-        case IDM_PRINTERSANDFAXES: iconIndex = -138; break;
-        case IDM_TASKBARANDSTARTMENU: iconIndex = -40; break;
-        //case IDM_SECURITY: iconIndex = -21; break;
-        //case IDM_SYNCHRONIZE: iconIndex = -21; break;
-        //case IDM_DISCONNECT: iconIndex = -21; break;
-        //case IDM_UNDOCKCOMPUTER: iconIndex = -21; break;
+        case TRAYCMD_CONTROL_PANEL: iconIndex = -22; break;
+        case TRAYCMD_NETWORKCONNECTIONS: iconIndex = -257; break;
+        case TRAYCMD_PRINTERS: iconIndex = -138; break;
+        case TRAYCMD_TASKBAR_PROPERTIES: iconIndex = -40; break;
+        //case TRAYCMD_SECURITY: iconIndex = -21; break;
+        //case TRAYCMD_SYNCHRONIZE: iconIndex = -21; break;
+        //case TRAYCMD_SWITCHUSER: iconIndex = -21; break;
+        //case TRAYCMD_UNDOCKCOMPUTER: iconIndex = -21; break;
         default:
             return S_FALSE;
         }
@@ -165,9 +142,9 @@ private:
 
         switch (psmd->uId)
         {
-        case IDM_PROGRAMS:  csidl = CSIDL_PROGRAMS; break;
-        case IDM_FAVORITES: csidl = CSIDL_FAVORITES; break;
-        case IDM_DOCUMENTS: csidl = CSIDL_RECENT; break;
+        case TRAYCMD_PROGRAMS:  csidl = CSIDL_PROGRAMS; break;
+        case TRAYCMD_FAVORITES: csidl = CSIDL_FAVORITES; break;
+        case TRAYCMD_DOCUMENTS: csidl = CSIDL_RECENT; break;
         }
 
         if (csidl)
@@ -217,10 +194,10 @@ private:
 
     HRESULT OnGetContextMenu(LPSMDATA psmd, REFIID iid, void ** pv)
     {
-        if (psmd->uId == IDM_PROGRAMS ||
-            psmd->uId == IDM_CONTROLPANEL ||
-            psmd->uId == IDM_NETWORKCONNECTIONS ||
-            psmd->uId == IDM_PRINTERSANDFAXES)
+        if (psmd->uId == TRAYCMD_PROGRAMS ||
+            psmd->uId == TRAYCMD_CONTROL_PANEL ||
+            psmd->uId == TRAYCMD_NETWORKCONNECTIONS ||
+            psmd->uId == TRAYCMD_PRINTERS)
         {
             //UNIMPLEMENTED
         }
@@ -243,11 +220,11 @@ private:
         // HACK: Because our ShellExecute can't handle CLSID components in paths, we can't launch the paths using the "open" verb.
         // FIXME: Change this back to using the path as the filename and the "open" verb, once ShellExecute can handle CLSID path components.
 
-        if (psmd->uId == IDM_CONTROLPANEL)
+        if (psmd->uId == TRAYCMD_CONTROL_PANEL)
             ShellExecuteW(NULL, NULL, L"explorer.exe", L"::{20D04FE0-3AEA-1069-A2D8-08002B30309D}\\::{21EC2020-3AEA-1069-A2DD-08002B30309D}", NULL, SW_SHOWNORMAL);
-        else if (psmd->uId == IDM_NETWORKCONNECTIONS)
+        else if (psmd->uId == TRAYCMD_NETWORKCONNECTIONS)
             ShellExecuteW(NULL, NULL, L"explorer.exe", L"::{20D04FE0-3AEA-1069-A2D8-08002B30309D}\\::{21EC2020-3AEA-1069-A2DD-08002B30309D}\\::{7007ACC7-3202-11D1-AAD2-00805FC1270E}", NULL, SW_SHOWNORMAL);
-        else if (psmd->uId == IDM_PRINTERSANDFAXES)
+        else if (psmd->uId == TRAYCMD_PRINTERS)
             ShellExecuteW(NULL, NULL, L"explorer.exe", L"::{20D04FE0-3AEA-1069-A2D8-08002B30309D}\\::{21EC2020-3AEA-1069-A2DD-08002B30309D}\\::{2227A280-3AEA-1069-A2DE-08002B30309D}", NULL, SW_SHOWNORMAL);
         else
             PostMessageW(m_hwndTray, WM_COMMAND, psmd->uId, 0);

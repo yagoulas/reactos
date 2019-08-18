@@ -658,6 +658,41 @@ IStream* WINAPI SHGetViewStream(LPCITEMIDLIST, DWORD, LPCTSTR, LPCTSTR, LPCTSTR)
 
 EXTERN_C HRESULT WINAPI SHCreateSessionKey(REGSAM samDesired, PHKEY phKey);
 
+// Tray commands
+/* TODO: Add more and implement them */
+#define TRAYCMD_STARTMENU           305
+#define TRAYCMD_RUN                 401
+#define TRAYCMD_LOGOFF              402
+#define TRAYCMD_CASCADE             403
+#define TRAYCMD_TILE_H              404
+#define TRAYCMD_TILE_V              405
+#define TRAYCMD_TOGGLE_DESKTOP      407
+#define TRAYCMD_DATE_AND_TIME       408
+#define TRAYCMD_UNDOCKCOMPUTER      410
+#define TRAYCMD_TASKBAR_PROPERTIES  413
+#define TRAYCMD_MINIMIZE_ALL        415
+#define TRAYCMD_RESTORE_ALL         416
+#define TRAYCMD_SHOW_DESKTOP        419
+#define TRAYCMD_OPEN_TASKMGR        420
+#define TRAYCMD_CUSTOMIZE_TASKBAR   421
+#define TRAYCMD_LOCK_TASKBAR        424
+#define TRAYCMD_DOCUMENTS           501
+#define TRAYCMD_HELP_AND_SUPPORT    503
+#define TRAYCMD_PROGRAMS            504
+#define TRAYCMD_CONTROL_PANEL       505
+#define TRAYCMD_SHUTDOWN            506
+#define TRAYCMD_FAVORITES           507
+#define TRAYCMD_SETTINGS            508
+#define TRAYCMD_PRINTERS            510
+#define TRAYCMD_LOCK_DESKTOP        517
+#define TRAYCMD_SEARCH              520
+#define TRAYCMD_SYNCHRONIZE         553
+#define TRAYCMD_NETWORKCONNECTIONS  557
+#define TRAYCMD_SWITCHUSER          5000
+#define TRAYCMD_SECURITY            5001
+#define TRAYCMD_SEARCH_FILES        41093
+#define TRAYCMD_SEARCH_COMPUTERS    41094
+
 /*****************************************************************************
  * Shell Link
  */
