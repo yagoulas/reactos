@@ -42,6 +42,20 @@ HRESULT TrayWindowCtxMenuCreator(ITrayWindow * TrayWnd, IN HWND hWndOwner, ICont
 #define AUTOHIDE_SHOWN 2
 #define AUTOHIDE_HIDING 3
 
+UINT* uHotKeyCommands = {TRAYCMD_RUN,
+                         TRAYCMD_MINIMIZE_ALL,
+						 TRAYCMD_RESTORE_ALL,
+						 TRAYCMD_HELP_AND_SUPPORT,
+						 0,
+						 TRAYCMD_SEARCH_FILES,
+						 TRAYCMD_SEARCH_COMPUTERS,
+						 0,
+						 0,
+						 0,
+						 TRAYCMD_TOGGLE_DESKTOP,
+                         0};
+
+#define IDHK_FIRST 0x1f4
 #define IDHK_RUN 0x1f4
 #define IDHK_MINIMIZE_ALL 0x1f5
 #define IDHK_RESTORE_ALL 0x1f6
@@ -54,6 +68,7 @@ HRESULT TrayWindowCtxMenuCreator(ITrayWindow * TrayWnd, IN HWND hWndOwner, ICont
 #define IDHK_SYS_PROPERTIES 0x1fd
 #define IDHK_DESKTOP 0x1fe
 #define IDHK_PAGER 0x1ff
+#define IDHK_LAST 0x1ff
 
 static const WCHAR szTrayWndClass[] = L"Shell_TrayWnd";
 
@@ -571,95 +586,21 @@ public:
         }
     }
 
-    BOOL STDMETHODCALLTYPE ExecContextMenuCmd(IN UINT uiCmd)
-    {
-        switch (uiCmd)
-        {
-        case ID_SHELL_CMD_PROPERTIES:
-            DisplayProperties();
-            break;
-
-        case ID_SHELL_CMD_OPEN_ALL_USERS:
-            OpenCommonStartMenuDirectory(m_hWnd,
-                                         TEXT("open"));
-            break;
-
-        case ID_SHELL_CMD_EXPLORE_ALL_USERS:
-            OpenCommonStartMenuDirectory(m_hWnd,
-                                         TEXT("explore"));
-            break;
-
-        case ID_LOCKTASKBAR:
-            if (SHRestricted(REST_CLASSICSHELL) == 0)
-            {
-                Lock(!g_TaskbarSettings.bLock);
-            }
-            break;
-
-        case ID_SHELL_CMD_OPEN_TASKMGR:
-            OpenTaskManager(m_hWnd);
-            break;
-
-        case ID_SHELL_CMD_UNDO_ACTION:
-            break;
-
-        case ID_SHELL_CMD_SHOW_DESKTOP:
-            ShowDesktop();
-            break;
-
-        case ID_SHELL_CMD_TILE_WND_H:
-            TileWindows(NULL, MDITILE_HORIZONTAL, NULL, 0, NULL);
-            break;
-
-        case ID_SHELL_CMD_TILE_WND_V:
-            TileWindows(NULL, MDITILE_VERTICAL, NULL, 0, NULL);
-            break;
-
-        case ID_SHELL_CMD_CASCADE_WND:
-            CascadeWindows(NULL, MDITILE_SKIPDISABLED, NULL, 0, NULL);
-            break;
-
-        case ID_SHELL_CMD_CUST_NOTIF:
-            ShowCustomizeNotifyIcons(hExplorerInstance, m_hWnd);
-            break;
-
-        case ID_SHELL_CMD_ADJUST_DAT:
-            //FIXME: Use SHRunControlPanel
-            ShellExecuteW(m_hWnd, NULL, L"timedate.cpl", NULL, NULL, SW_NORMAL);
-            break;
-
-        case ID_SHELL_CMD_RESTORE_ALL:
-            RestoreAll();
-            break;
-
-        default:
-            TRACE("ITrayWindow::ExecContextMenuCmd(%u): Unhandled Command ID!\n", uiCmd);
-            return FALSE;
-        }
-
-        return TRUE;
-    }
-
     LRESULT HandleHotKey(DWORD id)
     {
+		if (id < IDHK_FIRST || id > IDHK_LAST)
+			return 0;
+		
+		UINT uCmdID = uHotKeyCommands[id];
+		if (uCmdID)
+			return HandleCommand(uCmdID);
+
         switch (id)
         {
-        case IDHK_RUN:
-            DisplayRunFileDlg();
-            break;
-        case IDHK_HELP:
-            ExecResourceCmd(IDS_HELP_COMMAND);
-            break;
         case IDHK_EXPLORE:
             //FIXME: We don't support this yet:
             //ShellExecuteW(0, L"explore", NULL, NULL, NULL, 1);
             ShellExecuteW(0, NULL, L"explorer.exe", L"/e ,", NULL, 1);
-            break;
-        case IDHK_FIND:
-            SHFindFiles(NULL, NULL);
-            break;
-        case IDHK_FIND_COMPUTER:
-            SHFindComputer(NULL, NULL);
             break;
         case IDHK_SYS_PROPERTIES:
             //FIXME: Use SHRunControlPanel
@@ -668,15 +609,6 @@ public:
         case IDHK_NEXT_TASK:
             break;
         case IDHK_PREV_TASK:
-            break;
-        case IDHK_MINIMIZE_ALL:
-            MinimizeAll();
-            break;
-        case IDHK_RESTORE_ALL:
-            RestoreAll();
-            break;
-        case IDHK_DESKTOP:
-            ToggleDesktop();
             break;
         case IDHK_PAGER:
             break;
@@ -692,7 +624,7 @@ public:
             case TRAYCMD_STARTMENU:
                 // TODO:
                 break;
-            case TRAYCMD_RUN_DIALOG:
+            case TRAYCMD_RUN:
                 DisplayRunFileDlg();
                 break;
             case TRAYCMD_LOGOFF_DIALOG:
@@ -3349,7 +3281,7 @@ public:
             }
             else
             {
-                TrayWnd->ExecContextMenuCmd(uiCmdId);
+				SendMessageW(hWndOwner, WM_COMMAND, uiCmdId, 0);
             }
         }
 
