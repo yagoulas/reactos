@@ -620,7 +620,7 @@ CDefaultContextMenu::AddStaticContextMenusToMenu(
     return cIds;
 }
 
-void WINAPI _InsertMenuItemW(
+void _InsertMenuItemW(
     HMENU hMenu,
     UINT indexMenu,
     BOOL fByPosition,
@@ -659,6 +659,23 @@ void WINAPI _InsertMenuItemW(
     InsertMenuItemW(hMenu, indexMenu, fByPosition, &mii);
 }
 
+void _InsertMenuItemW(
+    QCMINFO& qcminfo,
+    UINT wID,
+    LPCWSTR dwTypeData,
+    UINT fType,
+    UINT fState)
+{
+    _InsertMenuItemW(qcminfo.hmenu, 
+                     qcminfo.indexMenu++, 
+                     TRUE, 
+                     qcminfo.idCmdFirst + wID, 
+                     fType, 
+                     dwTypeData, 
+                     fState);
+
+}        
+
 HRESULT
 WINAPI
 CDefaultContextMenu::QueryContextMenu(
@@ -682,14 +699,14 @@ CDefaultContextMenu::QueryContextMenu(
     }
 
     /* Add static context menu handlers */
+    m_iIdSCMFirst = cIds;
     cIds = AddStaticContextMenusToMenu(hMenu, &IndexMenu, idCmdFirst, idCmdLast);
-    m_iIdSCMFirst = 0;
     m_iIdSCMLast = cIds;
     idCmdNext = idCmdFirst + cIds;
 
     /* Add dynamic context menu handlers */
+    m_iIdSHEFirst = cIds;
     cIds += AddShellExtensionsToMenu(hMenu, &IndexMenu, idCmdNext, idCmdLast);
-    m_iIdSHEFirst = m_iIdSCMLast;
     m_iIdSHELast = cIds;
     idCmdNext = idCmdFirst + cIds;
     TRACE("SH_LoadContextMenuHandlers first %x last %x\n", m_iIdSHEFirst, m_iIdSHELast);
@@ -698,9 +715,11 @@ CDefaultContextMenu::QueryContextMenu(
     QCMINFO qcminfo = {hMenu, IndexMenu, idCmdNext, idCmdLast, NULL};
     if (SUCCEEDED(_DoCallback(DFM_MERGECONTEXTMENU, uFlags, &qcminfo)))
     {
-        cIds += qcminfo.idCmdFirst;
-        IndexMenu += qcminfo.idCmdFirst;
-        m_iIdCBFirst = m_iIdSHELast;
+        UINT idMax = qcminfo.idCmdFirst;
+        IndexMenu += idMax - idCmdNext;
+
+        m_iIdCBFirst = cIds;
+        cIds += idMax - idCmdNext;
         m_iIdCBLast = cIds;
         idCmdNext = idCmdFirst + cIds;
     }

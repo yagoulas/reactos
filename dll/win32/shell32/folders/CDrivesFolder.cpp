@@ -180,30 +180,26 @@ HRESULT CALLBACK DrivesContextMenuCallback(IShellFolder *psf,
     {
         QCMINFO *pqcminfo = (QCMINFO *)lParam;
 
-        UINT idCmdFirst = pqcminfo->idCmdFirst;
         if (!(dwFlags & FILE_READ_ONLY_VOLUME) && nDriveType != DRIVE_REMOTE)
         {
             /* add separator and Format */
-            UINT idCmd = idCmdFirst + CMDID_FORMAT;
-            _InsertMenuItemW(pqcminfo->hmenu, pqcminfo->indexMenu++, TRUE, 0, MFT_SEPARATOR, NULL, 0);
-            _InsertMenuItemW(pqcminfo->hmenu, pqcminfo->indexMenu++, TRUE, idCmd, MFT_STRING, MAKEINTRESOURCEW(IDS_FORMATDRIVE), MFS_ENABLED);
+            _InsertMenuItemW(*pqcminfo, 0, NULL, MFT_SEPARATOR);
+            _InsertMenuItemW(*pqcminfo, CMDID_FORMAT, MAKEINTRESOURCEW(IDS_FORMATDRIVE));
         }
         if (nDriveType == DRIVE_REMOVABLE || nDriveType == DRIVE_CDROM)
         {
             /* add separator and Eject */
-            UINT idCmd = idCmdFirst + CMDID_EJECT;
-            _InsertMenuItemW(pqcminfo->hmenu, pqcminfo->indexMenu++, TRUE, 0, MFT_SEPARATOR, NULL, 0);
-            _InsertMenuItemW(pqcminfo->hmenu, pqcminfo->indexMenu++, TRUE, idCmd, MFT_STRING, MAKEINTRESOURCEW(IDS_EJECT), MFS_ENABLED);
+            _InsertMenuItemW(*pqcminfo, 0, NULL, MFT_SEPARATOR);
+            _InsertMenuItemW(*pqcminfo, CMDID_EJECT, MAKEINTRESOURCEW(IDS_EJECT));
         }
         if (nDriveType == DRIVE_REMOTE)
         {
             /* add separator and Disconnect */
-            UINT idCmd = idCmdFirst + CMDID_DISCONNECT;
-            _InsertMenuItemW(pqcminfo->hmenu, pqcminfo->indexMenu++, TRUE, 0, MFT_SEPARATOR, NULL, 0);
-            _InsertMenuItemW(pqcminfo->hmenu, pqcminfo->indexMenu++, TRUE, idCmd, MFT_STRING, MAKEINTRESOURCEW(IDS_DISCONNECT), MFS_ENABLED);
+            _InsertMenuItemW(*pqcminfo, 0, NULL, MFT_SEPARATOR);
+            _InsertMenuItemW(*pqcminfo, CMDID_DISCONNECT, MAKEINTRESOURCEW(IDS_DISCONNECT));
         }
 
-        pqcminfo->idCmdFirst += 3;
+        pqcminfo->idCmdFirst += 4;
     }
     else if (uMsg == DFM_INVOKECOMMAND)
     {
@@ -1084,7 +1080,7 @@ HRESULT WINAPI CDrivesFolder::CallBack(IShellFolder *psf, HWND hwndOwner, IDataO
     /* no data object means no selection */
     if (!pdtobj)
     {
-        if (uMsg == DFM_INVOKECOMMAND && wParam == 1)   // #1
+        if (uMsg == DFM_INVOKECOMMAND && wParam == 1)
         {
             // "System" properties
             ShellExecuteW(hwndOwner,
@@ -1097,11 +1093,8 @@ HRESULT WINAPI CDrivesFolder::CallBack(IShellFolder *psf, HWND hwndOwner, IDataO
         else if (uMsg == DFM_MERGECONTEXTMENU)
         {
             QCMINFO *pqcminfo = (QCMINFO *)lParam;
-            HMENU hpopup = CreatePopupMenu();
-            _InsertMenuItemW(hpopup, 0, TRUE, 0, MFT_SEPARATOR, NULL, MFS_ENABLED); // #0
-            _InsertMenuItemW(hpopup, 1, TRUE, 1, MFT_STRING, MAKEINTRESOURCEW(IDS_PROPERTIES), MFS_ENABLED); // #1
-            Shell_MergeMenus(pqcminfo->hmenu, hpopup, pqcminfo->indexMenu++, pqcminfo->idCmdFirst, pqcminfo->idCmdLast, MM_ADDSEPARATOR);
-            DestroyMenu(hpopup);
+            _InsertMenuItemW(*pqcminfo, 0, NULL, MFT_SEPARATOR);
+            _InsertMenuItemW(*pqcminfo, 1, MAKEINTRESOURCEW(IDS_PROPERTIES));
         }
 
         return S_OK;

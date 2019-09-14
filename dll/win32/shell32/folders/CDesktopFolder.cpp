@@ -855,10 +855,9 @@ HRESULT WINAPI CDesktopFolder::CallBack(IShellFolder *psf, HWND hwndOwner, IData
         else if (uMsg == DFM_MERGECONTEXTMENU)
         {
             QCMINFO *pqcminfo = (QCMINFO *)lParam;
-            HMENU hpopup = CreatePopupMenu();
-            _InsertMenuItemW(hpopup, 0, TRUE, 0, MFT_STRING, MAKEINTRESOURCEW(IDS_PROPERTIES), MFS_ENABLED);
-            Shell_MergeMenus(pqcminfo->hmenu, hpopup, pqcminfo->indexMenu++, pqcminfo->idCmdFirst, pqcminfo->idCmdLast, MM_ADDSEPARATOR);
-            DestroyMenu(hpopup);
+            _InsertMenuItemW(*pqcminfo, 0, NULL, MFT_SEPARATOR);
+            _InsertMenuItemW(*pqcminfo, 0, MAKEINTRESOURCEW(IDS_PROPERTIES));
+            pqcminfo->idCmdFirst++;
         }
 
         return S_OK;

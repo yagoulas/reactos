@@ -103,6 +103,16 @@ HRESULT inline SHSetStrRet(LPSTRRET pStrRet, DWORD resId)
     return SHSetStrRet(pStrRet, shell32_hInstance, resId);
 }
 
+void _InsertMenuItemW (HMENU hmenu, UINT indexMenu, BOOL fByPosition,
+        UINT wID, UINT fType, LPCWSTR dwTypeData, UINT fState);
+
+void _InsertMenuItemW(
+    QCMINFO& qcminfo,
+    UINT wID,
+    LPCWSTR dwTypeData,
+    UINT fType = MFT_STRING,
+    UINT fState = MFS_ENABLED);
+
 #endif
 
 #endif /* _SHFLDR_H_ */
